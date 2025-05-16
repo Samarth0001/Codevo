@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service_name    # service_name to be replaced with the uniqueId of the project
+  labels:
+    app: service_name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service_name
+  template:
+    metadata:
+      labels:
+        app: service_name
+    spec:
+      volumes:
+        - name: workspace-volume    # to bring the initial base code from R2 and even after refresh by user, it will be present in the volume as we continously push the code to R2
+          emptyDir: {}
+      initContainers:
+        - name: copy-s3-resources
+          image: amazon/aws-cli
+          command: ["/bin/sh", "-c"]
+          args:
+            - > #change here
+              aws s3 cp s3://repl/code/service_name/ /workspace/ --recursive &&   
+              echo "Resources copied from S3";
+          env:
+            - name: AWS_ACCESS_KEY_ID       #change here
+              value: "your_aws_key_id"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "your_aws_secret"
+          volumeMounts:
+            - name: workspace-volume
+              mountPath: /workspace
+      containers:
+        - name: runner
+          image: 100xdevs/runner:latest     #change here
+          ports:
+            - containerPort: 3001
+            - containerPort: 3000
+          volumeMounts:
+            - name: workspace-volume
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: "1"
+              memory: "500Mi"
+              ephemeral-storage: "500Mi"
+            limits:
+              cpu: "1"
+              memory: "500Mi"
+              ephemeral-storage: "500Mi"
+        # This container will be accessed by end user
+        - name: worker
+          image: 100xdevs/worker:latest     #change here
+          ports:
+            - containerPort: 3002
+          volumeMounts:
+            - name: workspace-volume
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: "1"
+              memory: "500Mi"
+              ephemeral-storage: "500Mi" 
+            limits:
+              cpu: "1"
+              memory: "500Mi"
+              ephemeral-storage: "500Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-name  # ← Must be same as projectId
+spec:
+  clusterIP: None  # ← This makes it a headless service
+  selector:
+    app: service-name
+  ports:
+    - protocol: TCP
+      name: ws      # will reach to runner
+      port: 3001
+      targetPort: 3001
+    - protocol: TCP
+      name: user    # will give access to terminal
+      port: 3000
+      targetPort: 3000
+
+
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: service_name
+# spec:
+#   selector:
+#     app: service_name
+#   ports:
+#     - protocol: TCP
+#       name: ws    # will reach to runner
+#       port: 3001
+#       targetPort: 3001
+#     - protocol: TCP
+#       name: user    # will give access to terminal
+#       port: 3000
+#       targetPort: 3000
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: service_name
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   - host: service_name.codevo.dev     # change here
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: service_name
+#             port:
+#               number: 3001
+#       - path: /output
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: service_name
+#             port:
+#               number: 3000
+      
+          
+  # - host: service_name.autogpt-cloud.com
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: service_name
+  #           port:
+  #             number: 3000 
