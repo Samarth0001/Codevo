@@ -1,4 +1,4 @@
-
+<br/>
 Codevo is a cloud-native, real-time collaborative online IDE platform. It empowers users to instantly create, code, run, and preview applications in multiple programming environments — from frontend frameworks like React to backend runtimes such as Node.js, Python and C++. Users can collaborate seamlessly in real-time, sharing code and terminal access, all within a secure, scalable, and isolated environment.
 <br/>
 
@@ -19,6 +19,43 @@ Codevo is a cloud-native, real-time collaborative online IDE platform. It empowe
 6) Secure Architecture: Pods run with restricted permissions, resource limits, and isolated networking to protect system integrity.
 
 <br/>
+
+<h2>Tech Stack</h2>
+<h3>Frontend</h3>
+
+- React.js
+- TypeScript
+- Tailwind CSS
+- xterm.js
+- Yjs 
+- Socket.IO 
+
+<h3>Backend</h3>
+
+- Express.js
+- TypeScript
+- Socket.IO
+- Node-PTY
+- Nodemailer
+
+<h3>Realtime Collaboration</h3>
+
+- Yjs + Custom Y-WebSocket Server
+- Socket.IO
+
+<h3>Database & Storage</h3>
+
+- MongoDBta
+- Cloudflare R2
+
+<h3>Infrastructure & DevOps</h3>
+
+- Docker
+- Kubernetes (K8s)
+- Nginx Ingress + Reverse Proxy
+
+<br/>
+
 <h2>Architecture</h2>
 
 <h3>High-Level Components</h3>
