@@ -27,10 +27,7 @@ spec:
               echo "Resources copied from S3";
 
           env:
-            - name: AWS_ACCESS_KEY_ID
-              value: "5ad45da9bc0e350880a7bb54b50ad8ed"
-            - name: AWS_SECRET_ACCESS_KEY
-              value: "1c16e754652b7be40ddcd380381d2fad1c5c8751bb8d26c0c6660a9816d11fe5"
+            
           # env:
           #   - name: AWS_ACCESS_KEY_ID
           #     valueFrom:
