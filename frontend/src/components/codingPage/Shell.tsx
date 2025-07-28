@@ -1,9 +1,13 @@
-
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { Socket } from 'socket.io-client';
 
-export const Shell = () => {
+interface ShellProps {
+  socket?: Socket | null;
+}
+
+export const Shell = ({ socket }: ShellProps) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -45,95 +49,47 @@ export const Shell = () => {
     
     term.write('Welcome to Codevo Terminal\r\n\r\n$ ');
     
-    term.onKey(e => {
-      const ev = e.domEvent;
-      const printable = !ev.altKey && !ev.ctrlKey && !ev.metaKey;
-      
-      if (ev.keyCode === 13) { // Enter key
-        const line = term.buffer.active.getLine(term.buffer.active.cursorY)?.translateToString() || '';
-        const command = line.substring(line.lastIndexOf('$ ') + 2).trim();
-        
-        term.write('\r\n');
-        
-        if (command) {
-          handleCommand(command, term);
-        }
-        
-        term.write('$ ');
-      } else if (ev.keyCode === 8) { // Backspace
-        // Check if cursor is after the prompt
-        const line = term.buffer.active.getLine(term.buffer.active.cursorY)?.translateToString() || '';
-        const cursorX = term.buffer.active.cursorX;
-        const promptIndex = line.lastIndexOf('$ ') + 2;
-        
-        if (cursorX > promptIndex) {
-          term.write('\b \b');
-        }
-      } else if (printable) {
-        term.write(e.key);
-      }
-    });
-    
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
-    
-    // Handle resize
-    const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
+
+    // Handle terminal input
+    term.onData((data) => {
+      if (socket) {
+        socket.emit('terminal:input', { input: data });
       }
+      term.write(data);
     });
-    
-    if (terminalRef.current) {
-      resizeObserver.observe(terminalRef.current);
+
+    // Start terminal session
+    if (socket) {
+      socket.emit('terminal:start', { replId: 'default' });
     }
-    
+
     return () => {
       term.dispose();
-      resizeObserver.disconnect();
     };
-  }, []);
-  
-  const handleCommand = (command: string, term: Terminal) => {
-    switch (command.toLowerCase()) {
-      case 'help':
-        term.write('Available commands: help, clear, ls, echo [text], date\r\n');
-        break;
-      case 'clear':
-        term.clear();
-        break;
-      case 'ls':
-        term.write('src/ public/ package.json README.md\r\n');
-        break;
-      case 'date':
-        term.write(`${new Date().toString()}\r\n`);
-        break;
-      default:
-        if (command.startsWith('echo ')) {
-          term.write(`${command.substring(5)}\r\n`);
-        } else {
-          term.write(`Command not found: ${command}. Type 'help' for available commands.\r\n`);
-        }
-        break;
-    }
-  };
+  }, [socket]);
 
-  // Resize terminal on window resize
+  // Handle terminal data from runner
   useEffect(() => {
-    const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
-      }
+    if (!socket || !xtermRef.current) return;
+
+    const handleTerminalData = ({ data }: { data: string }) => {
+      xtermRef.current?.write(data);
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    socket.on('terminal:data', handleTerminalData);
+
+    return () => {
+      socket.off('terminal:data', handleTerminalData);
+    };
+  }, [socket]);
 
   return (
     <div 
-      className="h-full w-full bg-gray-900"
-      ref={terminalRef}
+      ref={terminalRef} 
+      className="h-full w-full"
+      style={{ padding: '8px' }}
     />
   );
 };

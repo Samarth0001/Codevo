@@ -23,22 +23,53 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - > #change here
-              aws s3 cp s3://repl/code/service_name/ /workspace/ --recursive &&   
+              aws s3 cp s3://codevo/Base_Code/node-js/ /workspace/ --recursive --endpoint-url https://6927fc6db0d2809c64a8ab88a9ed5c2e.r2.cloudflarestorage.com &&   
               echo "Resources copied from S3";
+
           env:
-            - name: AWS_ACCESS_KEY_ID       #change here
-              value: "your_aws_key_id"
+            - name: AWS_ACCESS_KEY_ID
+              value: "5ad45da9bc0e350880a7bb54b50ad8ed"
             - name: AWS_SECRET_ACCESS_KEY
-              value: "your_aws_secret"
+              value: "1c16e754652b7be40ddcd380381d2fad1c5c8751bb8d26c0c6660a9816d11fe5"
+          # env:
+          #   - name: AWS_ACCESS_KEY_ID
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: server-credentials
+          #         key: R2_ACCESS_KEY_ID
+          #   - name: AWS_SECRET_ACCESS_KEY
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: server-credentials
+          #         key: R2_SECRET_ACCESS_KEY
+
+          # envFrom:
+          #   - secretRef:
+          #       name: aws-credentials
+                # run below command to create the secret in CLI
+                # kubectl create secret generic aws-credentials \
+                # --from-literal=AWS_ACCESS_KEY_ID=your_aws_key_id \
+                # --from-literal=AWS_SECRET_ACCESS_KEY=your_aws_secret
           volumeMounts:
-            - name: workspace-volume
+            - name: workspace-volume 
               mountPath: /workspace
       containers:
         - name: runner
-          image: 100xdevs/runner:latest     #change here
+          image: extremecoder01/runner    #change here
           ports:
-            - containerPort: 3001
-            - containerPort: 3000
+            - containerPort: 3000   # for terminal,chats,other stuffs
+            # - containerPort: 3001   # for preview
+          env:   # Only needed if runner needs some envs
+            - name: WORKER_URL
+              value: "http://localhost:3002"
+            - name: PORT
+              value: "3000"
+            - name: WORKSPACE_PATH
+              value: "/workspace"
+            - name: YJS_SERVER_URL
+              value: "ws://yjs-server.default.svc.cluster.local:3003/project-id"
+            - name: YJS_ROOM_NAME
+              value: "service_name"
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
@@ -53,9 +84,14 @@ spec:
               ephemeral-storage: "500Mi"
         # This container will be accessed by end user
         - name: worker
-          image: 100xdevs/worker:latest     #change here
+          image: extremecoder01/worker    #change here
           ports:
             - containerPort: 3002
+          envFrom:
+            - secretRef:
+                name: worker-env-secret   #change here
+                # run below command to create the secret in CLI
+                # kubectl create secret generic worker-env-secret --from-env-file=.env
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
@@ -73,20 +109,20 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: service-name  # ← Must be same as projectId
+  name: service_name  # ← Must be same as projectId
 spec:
   clusterIP: None  # ← This makes it a headless service
   selector:
-    app: service-name
+    app: service_name
   ports:
     - protocol: TCP
-      name: ws      # will reach to runner
-      port: 3001
-      targetPort: 3001
-    - protocol: TCP
-      name: user    # will give access to terminal
+      name: user    # will give access to runner
       port: 3000
       targetPort: 3000
+    # - protocol: TCP
+    #   name: preview    # will give access to preview
+    #   port: 3001
+    #   targetPort: 3001
 
 
 # ---
@@ -106,40 +142,29 @@ spec:
 #       name: user    # will give access to terminal
 #       port: 3000
 #       targetPort: 3000
-# ---
-# apiVersion: networking.k8s.io/v1
-# kind: Ingress
-# metadata:
-#   name: service_name
-# spec:
-#   ingressClassName: nginx
-#   rules:
-#   - host: service_name.codevo.dev     # change here
-#     http:
-#       paths:
-#       - path: /
-#         pathType: Prefix
-#         backend:
-#           service:
-#             name: service_name
-#             port:
-#               number: 3001
-#       - path: /output
-#         pathType: Prefix
-#         backend:
-#           service:
-#             name: service_name
-#             port:
-#               number: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: 
+  name: service_name
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: service_name.127.0.0.1.sslip.io     # change here
+    http:
+      paths:
+      - path: /user/socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: service_name
+            port:
+              number: 3000
+      - path: /preview/socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: service_name
+            port:
+              number: 3000
       
-          
-  # - host: service_name.autogpt-cloud.com
-  #   http:
-  #     paths:
-  #     - path: /
-  #       pathType: Prefix
-  #       backend:
-  #         service:
-  #           name: service_name
-  #           port:
-  #             number: 3000 

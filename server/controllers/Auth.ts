@@ -221,10 +221,7 @@ const login = async(req: Request,res: Response) => {
                 message: "Please fill all the details carefully!"
             })
         }
-        console.log("before finding user")
-        console.log('email',email)
         const registeredUser = await User.findOne({email: email}).populate("additionalDetails");
-        console.log("after finding user")
 
         if(!registeredUser){
             return res.status(401).json({
@@ -246,7 +243,6 @@ const login = async(req: Request,res: Response) => {
                 message: "Password do not match!"
             })
         }
-        console.log("after comparing pass")
         const payload = {
             email : registeredUser.email,
             id : registeredUser._id,
@@ -265,8 +261,6 @@ const login = async(req: Request,res: Response) => {
                 expiresIn: (isRemembered? '7d' : '3d')
             }
         )
-        console.log("after making token")
-
 
         let user = registeredUser.toObject();
         user.password = undefined;

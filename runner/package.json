@@ -1,9 +1,18 @@
 {
   "name": "runner",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "node test-yjs-integration.js",
+    "test:init": "node test-project-initialization.js",
+    "test:fixes": "node test-fixes.js",
+    "test:monaco": "node test-monaco-fixes.js",
+    "test:no-yjs": "node test-no-yjs.js",
+    "test:runner": "node test-runner-no-yjs.js",
+    "test:monaco-fixes": "node test-monaco-fixes-v2.js"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +30,12 @@
   },
   "dependencies": {
     "@types/cors": "^2.8.18",
-    "cors": "^2.8.5"
+    "@types/ws": "^8.18.1",
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "vite": "^7.0.4",
+    "ws": "^8.18.3"
   }
 }

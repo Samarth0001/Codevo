@@ -1,20 +1,22 @@
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Minimize } from "lucide-react";
 import { Shell } from "./Shell";
 import { Console } from "./Console";
+import { Socket } from "socket.io-client";
 
 interface TerminalPanelProps {
   terminalTab: 'shell' | 'console';
   setTerminalTab: (tab: 'shell' | 'console') => void;
   toggleTerminal: () => void;
+  socket?: Socket | null;
 }
 
 export const TerminalPanel = ({ 
   terminalTab, 
   setTerminalTab, 
-  toggleTerminal 
+  toggleTerminal,
+  socket
 }: TerminalPanelProps) => {
   return (
     <div className="h-full w-full flex flex-col bg-gray-900">
@@ -33,7 +35,7 @@ export const TerminalPanel = ({
           </Button>
         </div>
         <TabsContent value="shell" className="p-0 flex-1 overflow-hidden h-full">
-          <Shell />
+          <Shell socket={socket} />
         </TabsContent>
         <TabsContent value="console" className="p-0 flex-1 overflow-hidden h-full">
           <Console />

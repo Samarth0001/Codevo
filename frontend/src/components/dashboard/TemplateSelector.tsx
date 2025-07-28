@@ -45,7 +45,8 @@ const generateRandomName = (): string => {
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
   const suffix = Math.floor(Math.random() * 10000); // optional unique number
 
-  return `${adj}${noun}${suffix}`;
+  const randomName = `${adj}${noun}${suffix}`.toLowerCase();
+  return randomName;
 };
   const [activeTab, setActiveTab] = useState<string>("template");
   const [searchQuery, setSearchQuery] = useState<string>("");

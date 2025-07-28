@@ -41,7 +41,7 @@ const App = () => (
           </Route>
           <Route path='/verify-email' element={<VerifyEmail/>} />
 
-          <Route path="/coding/:id" element={<CodingPage/>}/>
+          <Route path="/coding/:projectId" element={<CodingPage/>}/>
 
           <Route path="*" element={<NotFound />} />
         </Routes>

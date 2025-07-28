@@ -10,13 +10,12 @@ export const copyBaseCode = async(data: any,setLoading:any, navigate : (path: st
     try{
         console.log(data)
         setLoading(true);
-        // await apiConnector("POST",COPY_PROJECT_API,data);
+        await apiConnector("POST",COPY_PROJECT_API,data);
         console.log("Project files copied successfully!");
         setLoading(false);
         const projectId = data.uniqueId;
         console.log(projectId);
         navigate(`/coding/${projectId}`);
-
     }
     catch(err:any){
         console.log("Error while copying base files ",err)

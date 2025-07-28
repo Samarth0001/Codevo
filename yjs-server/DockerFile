@@ -1,0 +1,21 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install only @y/websocket-server
+RUN npm install @y/websocket-server
+
+# Set env vars (optional: override in K8s)
+ENV PORT=3003
+ENV HOST=0.0.0.0
+
+# Expose port
+EXPOSE 3003
+
+# Start the server
+CMD ["npx", "y-websocket"]
+
+
+
+# docker build -f Dockerfile.yjs -t your-dockerhub-user/yjs-server:latest .
+# docker push your-dockerhub-user/yjs-server:latest

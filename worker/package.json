@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +23,10 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "aws-sdk": "^2.1692.0"
+    "@aws-sdk/client-s3": "^3.844.0",
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0"
   }
 }

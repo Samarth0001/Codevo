@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Folder, Search, Plus, FolderPlus } from 'lucide-react';
 import { 
@@ -15,7 +14,19 @@ interface FileItem {
   type: 'file' | 'folder';
   extension?: string;
   children?: FileItem[];
+  path?: string;
 }
+
+interface FileExplorerProps {
+  files?: FileItem[];
+  onCreateFile?: (path: string, isFolder?: boolean) => void;
+  onDeleteFile?: (path: string) => void;
+  onRenameFile?: (oldPath: string, newPath: string) => void;
+  onGetFileContent?: (path: string) => void;
+  isConnected?: boolean;
+}
+
+import { useEditor } from '@/context/EditorContext';
 
 const initialFiles: FileItem[] = [
   {
@@ -49,11 +60,19 @@ const initialFiles: FileItem[] = [
   { id: 'README.md', name: 'README.md', type: 'file', extension: 'md' }
 ];
 
-export const FileExplorer = () => {
-  const [files, setFiles] = useState<FileItem[]>(initialFiles);
+export const FileExplorer = ({ 
+  files = initialFiles, 
+  onCreateFile, 
+  onDeleteFile, 
+  onRenameFile, 
+  onGetFileContent,
+  isConnected = true 
+}: FileExplorerProps) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFile, setActiveFile] = useState('main.jsx');
+  const [renamingFile, setRenamingFile] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const {activeFile, setActiveFile} = useEditor();
 
   const toggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -67,7 +86,7 @@ export const FileExplorer = () => {
     });
   };
 
-  const getIconForFile = (extension?: string) => {
+  const getIconForFile = (extension?: string) => { 
     switch (extension) {
       case 'js':
       case 'jsx':
@@ -87,13 +106,43 @@ export const FileExplorer = () => {
     }
   };
 
-  const handleFileClick = (fileId: string) => {
+  const handleFileClick = (fileId: string, filePath?: string) => {
     setActiveFile(fileId);
+    if (filePath && onGetFileContent) {
+      onGetFileContent(filePath);
+    }
+  };
+
+  const handleCreateFile = (isFolder: boolean = false) => {
+    const fileName = prompt(`Enter new ${isFolder ? 'folder' : 'file'} name:`);
+    if (fileName && onCreateFile) {
+      onCreateFile(fileName, isFolder);
+    }
+  };
+
+  const handleDeleteFile = (filePath: string) => {
+    if (confirm('Are you sure you want to delete this file?') && onDeleteFile) {
+      onDeleteFile(filePath);
+    }
+  };
+
+  const handleRenameFile = (oldPath: string, newPath: string) => {
+    if (onRenameFile) {
+      onRenameFile(oldPath, newPath);
+    }
+    setRenamingFile(null);
+    setNewFileName('');
+  };
+
+  const startRename = (filePath: string, currentName: string) => {
+    setRenamingFile(filePath);
+    setNewFileName(currentName);
   };
 
   const renderFileItem = (item: FileItem, depth = 0) => {
     const isExpanded = expandedFolders.has(item.id);
     const isActive = item.id === activeFile;
+    const isRenaming = renamingFile === item.path;
 
     // Filter for search
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -114,7 +163,7 @@ export const FileExplorer = () => {
         <ContextMenuTrigger>
           <div 
             className={`flex items-center py-1 px-2 hover:bg-gray-700 transition-colors duration-150 cursor-pointer rounded ${isActive && item.type === 'file' ? 'bg-gray-700' : ''}`}
-            onClick={() => item.type === 'folder' ? toggleFolder(item.id) : handleFileClick(item.id)}
+            onClick={() => item.type === 'folder' ? toggleFolder(item.id) : handleFileClick(item.id, item.path)}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
           >
             {item.type === 'folder' ? (
@@ -129,21 +178,56 @@ export const FileExplorer = () => {
                 {getIconForFile(item.extension)}
               </span>
             )}
-            <span className="text-sm">{item.name}</span>
+            {isRenaming ? (
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && item.path) {
+                    handleRenameFile(item.path, newFileName);
+                  } else if (e.key === 'Escape') {
+                    setRenamingFile(null);
+                    setNewFileName('');
+                  }
+                }}
+                onBlur={() => {
+                  if (item.path) {
+                    handleRenameFile(item.path, newFileName);
+                  }
+                }}
+                className="flex-1 bg-gray-700 text-white text-sm px-1 rounded"
+                autoFocus
+              />
+            ) : (
+              <span className="text-sm">{item.name}</span>
+            )}
           </div>
           <ContextMenuContent className="bg-gray-800 border-gray-700 text-white">
-            <ContextMenuItem className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700">
+            <ContextMenuItem 
+              className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
+              onClick={() => handleCreateFile(false)}
+            >
               New File
             </ContextMenuItem>
-            <ContextMenuItem className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700">
+            <ContextMenuItem 
+              className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
+              onClick={() => handleCreateFile(true)}
+            >
               New Folder
             </ContextMenuItem>
             {item.type === 'file' && (
-              <ContextMenuItem className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700">
+              <ContextMenuItem 
+                className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
+                onClick={() => item.path && startRename(item.path, item.name)}
+              >
                 Rename
               </ContextMenuItem>
             )}
-            <ContextMenuItem className="text-red-400 hover:bg-gray-700 cursor-pointer focus:bg-gray-700">
+            <ContextMenuItem 
+              className="text-red-400 hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
+              onClick={() => item.path && handleDeleteFile(item.path)}
+            >
               Delete
             </ContextMenuItem>
           </ContextMenuContent>
@@ -163,10 +247,22 @@ export const FileExplorer = () => {
       <div className="flex items-center justify-between p-2 border-b border-gray-700">
         <div className="text-sm font-medium text-gray-300">Files</div>
         <div className="flex space-x-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-gray-700">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 hover:bg-gray-700"
+            onClick={() => handleCreateFile(false)}
+            disabled={!isConnected}
+          >
             <Plus size={14} className="text-gray-300" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-gray-700">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 hover:bg-gray-700"
+            onClick={() => handleCreateFile(true)}
+            disabled={!isConnected}
+          >
             <FolderPlus size={14} className="text-gray-300" />
           </Button>
         </div>
@@ -190,6 +286,14 @@ export const FileExplorer = () => {
           {files.map(file => renderFileItem(file))}
         </ContextMenu>
       </div>
+      
+      {!isConnected && (
+        <div className="p-2 bg-yellow-600/20 border-t border-yellow-600/40">
+          <div className="text-xs text-yellow-400 text-center">
+            Disconnected from runner
+          </div>
+        </div>
+      )}
     </div>
   );
 };
