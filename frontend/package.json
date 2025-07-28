@@ -71,7 +71,8 @@
     "tailwindcss-animate": "^1.0.7",
     "usehooks-ts": "^3.1.1",
     "uuid": "^11.1.0",
-    "vaul": "^0.9.3"
+    "vaul": "^0.9.3",
+    "vite-plugin-monaco-editor": "^1.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
