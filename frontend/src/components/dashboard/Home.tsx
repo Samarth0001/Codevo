@@ -1,4 +1,4 @@
-import React, { useEffect,useContext } from 'react'
+import React, { useContext } from 'react'
 import { Grid, BarChart, Calendar, Users } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import Header from "@/components/dashboard/Header";
@@ -8,45 +8,10 @@ import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import { AuthContext } from '@/context/AuthContext';
 
 const Home = () => {
-
-    const projects = [
-        {
-          id: 1,
-          name: "react-dashboard",
-          description: "A beautiful React dashboard with Tailwind CSS and TypeScript.",
-          language: "TypeScript",
-          lastUpdated: "2h ago",
-          stars: 24,
-          forks: 5,
-        },
-        {
-          id: 2,
-          name: "api-client",
-          description: "REST API client with authentication, request caching, and error handling.",
-          language: "JavaScript",
-          lastUpdated: "1d ago",
-          stars: 18,
-          forks: 3,
-        },
-        {
-          id: 3,
-          name: "ml-classifier",
-          description: "Machine learning image classification model with Python and TensorFlow.",
-          language: "Python",
-          lastUpdated: "3d ago",
-          stars: 42,
-          forks: 8,
-        },
-        {
-          id: 4,
-          name: "landing-page",
-          description: "Responsive landing page template with smooth animations.",
-          language: "HTML",
-          lastUpdated: "1w ago",
-          stars: 12,
-          forks: 2,
-        },
-      ];
+    const { user } = useContext(AuthContext);
+    
+    // Get projects from user context (already populated from backend)
+    const projects = user?.projects || [];
 
       const activities = [
         {
@@ -92,28 +57,28 @@ const Home = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatsCard 
               title="Total Projects" 
-              value="24" 
-              change="12%" 
+              value={projects.length.toString()} 
+              change="0%" 
               trend="up" 
               icon={<Grid size={24} className="text-codevo-blue" />}
             />
             <StatsCard 
               title="Active Sessions" 
-              value="183" 
-              change="8%" 
+              value="0" 
+              change="0%" 
               trend="up" 
               icon={<Users size={24} className="text-green-500" />}
             />
             <StatsCard 
               title="Weekly Commits" 
-              value="87" 
-              change="5%" 
+              value="0" 
+              change="0%" 
               trend="down" 
               icon={<BarChart size={24} className="text-purple-500" />}
             />
             <StatsCard 
               title="Upcoming Deadlines" 
-              value="3" 
+              value="0" 
               icon={<Calendar size={24} className="text-yellow-500" />}
             />
           </div>
@@ -125,11 +90,21 @@ const Home = () => {
                   <h2 className="text-lg font-medium text-white">My Projects</h2>
                   <button className="text-sm text-codevo-blue hover:underline">View all</button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {projects.map((project) => (
-                    <ProjectCard key={project.id} {...project} />
-                  ))}
-                </div>
+                {!user ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-codevo-blue"></div>
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    <p>No projects found. Create your first project to get started!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {projects.map((project) => (
+                      <ProjectCard key={project.id} {...project} />
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="bg-dark-accent border border-dark-border rounded-lg p-4">

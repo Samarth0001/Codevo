@@ -1,5 +1,5 @@
 import { apiConnector } from '@/services/apiConnector';
-import React,{createContext, useEffect, useState} from 'react'
+import React,{createContext, useEffect, useState, useContext} from 'react'
 import {authEndpoints} from '../services/apis'
 
 const USER_DETAILS_API = authEndpoints.USER_DETAILS_API;
@@ -13,6 +13,7 @@ type AuthContextType = {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
   loggedIn: boolean;
   setLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
+  refreshUser: () => Promise<void>;
   // currentPath: string;
   // setCurrentPath: React.Dispatch<React.SetStateAction<string>>;
 };
@@ -45,6 +46,10 @@ const AuthProvider= ({children}:{children:React.ReactNode}) => {
     setLoading(false);
   }
 
+  const refreshUser = async() => {
+    await getUserDetails();
+  }
+
   useEffect(() => {
     getUserDetails();
   }, []);   //runs only one time after refresh
@@ -58,6 +63,7 @@ const AuthProvider= ({children}:{children:React.ReactNode}) => {
     setUser,
     signupData,
     setSignupData,
+    refreshUser,
   }
 
   return (
@@ -66,5 +72,10 @@ const AuthProvider= ({children}:{children:React.ReactNode}) => {
     </AuthContext.Provider>
   )
 }
+
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
+
 
 export {AuthContext,AuthProvider}

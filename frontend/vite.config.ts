@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
+// import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -15,10 +15,10 @@ export default defineConfig(({ mode }) => ({
     mode === 'development' &&
     componentTagger(),
     // Monaco Editor plugin
-    monacoEditorPlugin({
-      languageWorkers: ['editorWorkerService', 'typescript', 'json', 'html', 'css'],
-      publicPath: 'monaco-editor-workers',
-    }),
+    // monacoEditorPlugin({
+    //   languageWorkers: ['editorWorkerService', 'typescript', 'json', 'html', 'css'],
+    //   publicPath: 'monaco-editor-workers',
+    // }),
   ].filter(Boolean),
   optimizeDeps: {
     include: ['monaco-editor'],

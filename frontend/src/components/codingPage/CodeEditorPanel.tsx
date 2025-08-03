@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { AuthContext } from "@/context/AuthContext";
 import { useParams } from "react-router-dom";
 import { useEditor } from "@/context/EditorContext";
+import { useCollaboration } from "@/context/CollaborationContext";
 import { Socket } from "socket.io-client";
+import { UserAwareness } from "./UserAwareness";
+import { CollaborationStatus } from "./CollaborationStatus";
+import { EditorErrorBoundary } from "./EditorErrorBoundary";
 
 interface CodeEditorPanelProps {
   currentTheme: string;
@@ -21,10 +25,12 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
   const editorRef = useRef<any>(null);
   const [fileContents, setFileContents] = useState<FileContent>({});
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [editorKey, setEditorKey] = useState(0); // Force re-mount when this changes
 
   const { activeFile, setActiveFile, openFiles, setOpenFiles } = useEditor();
   const { user } = useContext(AuthContext);
   const { projectId: roomId } = useParams();
+  const { applyFileChange, getFileChanges } = useCollaboration();
 
   function getLanguageForFile(filename: string): string {
     const extension = filename.split('.').pop()?.toLowerCase();
@@ -87,6 +93,12 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
       const newFileContents: FileContent = {};
       filesWithContent.forEach(file => {
         if (file.type === 'file' && file.path && file.content !== undefined) {
+          console.log(`[CodeEditorPanel] Processing file ${file.path}:`, {
+            contentType: typeof file.content,
+            contentLength: file.content?.length,
+            contentPreview: typeof file.content === 'string' ? file.content.substring(0, 50) : file.content
+          });
+          
           newFileContents[file.path] = typeof file.content === 'string' ? file.content : String(file.content || '');
         }
       });
@@ -94,41 +106,151 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
       setFileContents(newFileContents);
     };
 
-    const handleContentUpdated = ({ path, content, updatedBy }: { path: string; content: string; updatedBy: string }) => {
-      console.log(`[CodeEditorPanel] Content updated by ${updatedBy} for: ${path}`);
+    const handleContentUpdated = ({ path, content, diffType, version, userId, timestamp }: { 
+      path: string; 
+      content: any; 
+      diffType: 'full' | 'patch';
+      version: number;
+      userId: string;
+      timestamp: number;
+    }) => {
+      console.log(`[CodeEditorPanel] Content updated by ${userId} for: ${path}`, {
+        contentType: typeof content,
+        contentLength: content?.length,
+        contentPreview: typeof content === 'string' ? content.substring(0, 50) : content,
+        diffType
+      });
       
-      // Update local file contents
-      setFileContents(prev => ({
-        ...prev,
-        [path]: content
-      }));
+      // Apply the change
+      applyFileChange(path, {
+        path,
+        content,
+        diffType,
+        version,
+        userId,
+        timestamp
+      });
+
+      // Update local file contents - ensure content is always a string
+      const contentString = typeof content === 'string' ? content : String(content || '');
+      
+      if (diffType === 'full') {
+        setFileContents(prev => ({
+          ...prev,
+          [path]: contentString
+        }));
+      } else {
+        // Handle patch updates - for now, just update with full content
+        // In a real implementation, you'd apply the diff
+        setFileContents(prev => ({
+          ...prev,
+          [path]: contentString
+        }));
+      }
+    };
+
+    const handleFileDeleted = ({ path }: { path: string; deletedBy: string; timestamp: number }) => {
+      console.log(`[CodeEditorPanel] File deleted: ${path}`);
+      
+      // Remove the deleted file from fileContents state
+      setFileContents(prev => {
+        const newFileContents = { ...prev };
+        delete newFileContents[path];
+        console.log(`[CodeEditorPanel] Removed ${path} from fileContents, remaining files:`, Object.keys(newFileContents));
+        return newFileContents;
+      });
+
+      // If the deleted file was the active file, force editor re-mount
+      if (activeFile === path) {
+        console.log(`[CodeEditorPanel] Active file was deleted, forcing editor re-mount`);
+        setEditorKey(prev => prev + 1);
+      }
+    };
+
+    const handleFileCreated = (file: { path: string; name: string; type: string; createdBy: string; timestamp: number }) => {
+      console.log(`[CodeEditorPanel] File created: ${file.path}`);
+      
+      // Add the new file to fileContents state with empty content
+      if (file.type === 'file') {
+        setFileContents(prev => ({
+          ...prev,
+          [file.path]: ''
+        }));
+      }
+    };
+
+    const handleFileRenamed = ({ oldPath, newPath }: { oldPath: string; newPath: string; renamedBy: string; timestamp: number }) => {
+      console.log(`[CodeEditorPanel] File renamed: ${oldPath} -> ${newPath}`);
+      
+      // Update fileContents state by moving content from old path to new path
+      setFileContents(prev => {
+        const newFileContents = { ...prev };
+        if (newFileContents[oldPath] !== undefined) {
+          newFileContents[newPath] = newFileContents[oldPath];
+          delete newFileContents[oldPath];
+          console.log(`[CodeEditorPanel] Moved content from ${oldPath} to ${newPath}`);
+        }
+        return newFileContents;
+      });
     };
 
     socket.on('project:initialized', handleProjectInitialized);
-    socket.on('files:contentUpdated', handleContentUpdated);
+    socket.on('file:changed', handleContentUpdated);
+    socket.on('file:deleted', handleFileDeleted);
+    socket.on('file:created', handleFileCreated);
+    socket.on('file:renamed', handleFileRenamed);
 
     return () => {
       socket.off('project:initialized', handleProjectInitialized);
-      socket.off('files:contentUpdated', handleContentUpdated);
+      socket.off('file:changed', handleContentUpdated);
+      socket.off('file:deleted', handleFileDeleted);
+      socket.off('file:created', handleFileCreated);
+      socket.off('file:renamed', handleFileRenamed);
     };
   }, [socket]);
 
   // Handle editor content changes
   const handleEditorChange = useCallback((value: string | undefined) => {
-    if (!activeFile || !socket || !value) return;
+    if (!activeFile || !socket) return;
+
+    // Check if the active file exists in fileContents (to prevent saving to deleted files)
+    if (!fileContents.hasOwnProperty(activeFile)) {
+      console.log(`[CodeEditorPanel] Attempted to save content to deleted file: ${activeFile}, ignoring`);
+      return;
+    }
+
+    // Ensure value is a string
+    const content = typeof value === 'string' ? value : String(value || '');
 
     // Update local state
     setFileContents(prev => ({
       ...prev,
-      [activeFile]: value
+      [activeFile]: content
     }));
 
     // Send to backend
     socket.emit('files:saveContent', {
       path: activeFile,
-      content: value
+      content: content
     });
-  }, [activeFile, socket]);
+  }, [activeFile, socket, fileContents]);
+
+  // Handle active file changes and ensure editor content is in sync
+  useEffect(() => {
+    if (activeFile && !fileContents[activeFile]) {
+      console.log(`[CodeEditorPanel] Active file ${activeFile} has no content, clearing editor`);
+      // If the active file doesn't exist in fileContents, it might have been deleted
+      // The editor will show empty content, which is correct
+    }
+  }, [activeFile, fileContents]);
+
+  // Force editor re-mount when active file changes
+  useEffect(() => {
+    if (activeFile) {
+      console.log(`[CodeEditorPanel] Active file changed to: ${activeFile}, updating editor key`);
+      setEditorKey(prev => prev + 1);
+    }
+  }, [activeFile]);
 
   // Cleanup models on unmount
   useEffect(() => {
@@ -164,7 +286,18 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
 
   // Get current file content
   const getCurrentFileContent = () => {
-    return activeFile ? (fileContents[activeFile] || '') : '';
+    if (!activeFile) {
+      return '';
+    }
+    
+    const content = fileContents[activeFile];
+    if (content === undefined) {
+      console.log(`[CodeEditorPanel] No content found for active file: ${activeFile}, returning empty string`);
+      return '';
+    }
+    
+    // Ensure content is always a string
+    return typeof content === 'string' ? content : String(content || '');
   };
 
   // Get current file language
@@ -183,7 +316,8 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
         <div className="ml-4 text-sm font-medium text-gray-300">
           {activeFile || 'No file selected'}
         </div>
-        <div className="ml-auto flex space-x-2">
+        <div className="ml-auto flex items-center space-x-2">
+          <CollaborationStatus />
           <Button variant="ghost" size="sm" className="text-xs text-gray-400 h-6 px-2">
             {getCurrentFileLanguage()}
           </Button>
@@ -208,15 +342,17 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
-        <Editor
-          height="100%"
-          width="100%"
-          language={getCurrentFileLanguage()}
-          value={getCurrentFileContent()}
-          theme={currentTheme}
-          onMount={handleEditorMount}
-          onChange={handleEditorChange}
+      <div className="flex-1 min-h-0 relative">
+        <EditorErrorBoundary>
+          <Editor
+            key={`${activeFile}-${editorKey}`}
+            height="100%"
+            width="100%"
+            language={getCurrentFileLanguage()}
+            value={getCurrentFileContent()}
+            theme={currentTheme}
+            onMount={handleEditorMount}
+            onChange={handleEditorChange}
           options={{
             // Basic editor settings
             fontSize: 14,
@@ -349,6 +485,8 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
             }
           }}
         />
+        </EditorErrorBoundary>
+        <UserAwareness editorRef={editorRef} />
       </div>
     </div>
   );

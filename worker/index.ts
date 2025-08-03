@@ -14,79 +14,71 @@ app.use(
     })
 );
 
-// AWS S3 client configuration
+// AWS S3/R2 client configuration
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'auto',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
-  forcePathStyle: true    
+  forcePathStyle: true,
+  endpoint: process.env.R2_ENDPOINT || undefined // For R2, this would be your R2 endpoint
 });
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'codevo';
 
-interface YjsEvent {
-  roomId: string;
-  event: string;
-  data: any;
-  timestamp: number;
-}
-
-// At the top of worker/index.ts
-const pendingUpdates = new Map(); // key: filePath, value: {event, data}
-let flushTimeout:any = null;
-
-function scheduleFlush() {
-  if (flushTimeout) return;
-  flushTimeout = setTimeout(flushUpdates, 10000); // flush every 1s
-}
-
-async function flushUpdates() {
-  for (const [filePath, {event, data}] of pendingUpdates.entries()) {
-    // call handleFileCreated/Modified/Deleted as appropriate
-  }
-  pendingUpdates.clear();
-  flushTimeout = null;
-}
-
-// Handle Yjs events from runner
-app.post('/yjs-events', async (req, res) => {
-  try {
-    const { roomId, event, data, timestamp }: YjsEvent = req.body;
-    
-    console.log(`[worker] Received ${event} for room ${roomId}:`, data);
-
-    switch (event) {
-      case 'file:created':
-        await handleFileCreated(roomId, data);
-        break;
+// Handle file persistence from runner
+app.post('/persist', (req, res) => {
+  (async () => {
+    try {
+      const { projectId, path, content, event = 'file:modified' } = req.body;
       
-      case 'file:modified':
-        await handleFileModified(roomId, data);
-        break;
-      
-      case 'file:deleted':
-        await handleFileDeleted(roomId, data);
-        break;
-      
-      default:
-        console.warn(`[worker] Unknown event type: ${event}`);
+      console.log(`[worker] Received ${event} for project ${projectId}, file: ${path}`);
+
+      if (!path) {
+        console.warn(`[worker] No path found in request:`, req.body);
+        return res.status(400).json({ error: 'Path is required' });
+      }
+
+      if (!projectId) {
+        console.warn(`[worker] No projectId found in request:`, req.body);
+        return res.status(400).json({ error: 'ProjectId is required' });
+      }
+
+      // Immediately persist to storage
+      try {
+        switch (event) {
+          case 'file:created':
+          case 'file:modified':
+            await persistFileToStorage(projectId, path, content);
+            break;
+          case 'file:deleted':
+            await deleteFileFromStorage(projectId, path);
+            break;
+          default:
+            console.warn(`[worker] Unknown event type: ${event}`);
+            return res.status(400).json({ error: `Unknown event type: ${event}` });
+        }
+        
+        console.log(`[worker] Successfully processed ${event} for ${path}`);
+        res.status(200).json({ success: true, message: `${event} processed successfully` });
+      } catch (storageError: any) {
+        console.error(`[worker] Storage error for ${event} ${path}:`, storageError);
+        res.status(500).json({ error: 'Storage operation failed', details: storageError.message });
+      }
+
+    } catch (error) {
+      console.error('[worker] Error processing persist request:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    // In /yjs-events handler:
-    pendingUpdates.set(data.filePath, {event, data});
-    scheduleFlush();
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('[worker] Error processing Yjs event:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  })();
 });
 
-async function handleFileCreated(roomId: string, data: { filePath: string; content: string }) {
-  const { filePath, content } = data;
-  const key = `Project_Code/${roomId}/${filePath}`;
+async function persistFileToStorage(projectId: string, filePath: string, content: string) {
+  const key = `Project_Code/${projectId}/${filePath}`;
+  
+  console.log(`[worker] Persisting file to storage: ${key}`);
+  console.log(`[worker] Content length: ${content.length} characters`);
   
   try {
     const command = new PutObjectCommand({
@@ -95,48 +87,24 @@ async function handleFileCreated(roomId: string, data: { filePath: string; conte
       Body: content,
       ContentType: getContentType(filePath),
       Metadata: {
-        'room-id': roomId,
+        'project-id': projectId,
         'file-path': filePath,
-        'created-at': new Date().toISOString(),
+        'persisted-at': new Date().toISOString(),
       },
     });
 
     await s3Client.send(command);
-    console.log(`[worker] File created in S3: ${key}`);
+    console.log(`[worker] File successfully persisted to storage: ${key}`);
   } catch (error) {
-    console.error(`[worker] Error creating file in S3: ${key}`, error);
+    console.error(`[worker] Error persisting file to storage: ${key}`, error);
     throw error;
   }
 }
 
-async function handleFileModified(roomId: string, data: { filePath: string; content: string }) {
-  const { filePath, content } = data;
-  const key = `Project_Code/${roomId}/${filePath}`;
+async function deleteFileFromStorage(projectId: string, filePath: string) {
+  const key = `Project_Code/${projectId}/${filePath}`;
   
-  try {
-    const command = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-      Body: content,
-      ContentType: getContentType(filePath),
-      Metadata: {
-        'room-id': roomId,
-        'file-path': filePath,
-        'modified-at': new Date().toISOString(),
-      },
-    });
-
-    await s3Client.send(command);
-    console.log(`[worker] File modified in S3: ${key}`);
-  } catch (error) {
-    console.error(`[worker] Error modifying file in S3: ${key}`, error);
-    throw error;
-  }
-}
-
-async function handleFileDeleted(roomId: string, data: { filePath: string }) {
-  const { filePath } = data;
-  const key = `Project_Code/${roomId}/${filePath}`;
+  console.log(`[worker] Deleting file from storage: ${key}`);
   
   try {
     const command = new DeleteObjectCommand({
@@ -145,9 +113,9 @@ async function handleFileDeleted(roomId: string, data: { filePath: string }) {
     });
 
     await s3Client.send(command);
-    console.log(`[worker] File deleted from S3: ${key}`);
+    console.log(`[worker] File successfully deleted from storage: ${key}`);
   } catch (error) {
-    console.error(`[worker] Error deleting file from S3: ${key}`, error);
+    console.error(`[worker] Error deleting file from storage: ${key}`, error);
     throw error;
   }
 }
@@ -182,28 +150,35 @@ function getContentType(filePath: string): string {
 
 // Health check endpoint
 app.get('/health', (_, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    bucket: BUCKET_NAME,
+    endpoint: process.env.S3_ENDPOINT || 'default',
+    region: process.env.AWS_REGION || 'auto'
+  });
 });
 
-// Get workspace files from S3
-// app.get('/workspace/:roomId', async (req, res) => {
-//   try {
-//     const { roomId } = req.params;
-    
-//     // This would require listing objects with the roomId prefix
-//     // For now, we'll return a simple response
-//     res.status(200).json({ 
-//       roomId, 
-//       message: 'Workspace files endpoint - implement S3 listing logic here' 
-//     });
-//   } catch (error) {
-//     console.error('[worker] Error getting workspace files:', error);
-//     res.status(500).json({ error: 'Internal server error' });
-//   }
-// });
+// Test endpoint for manual testing
+app.post('/test', (req, res) => {
+  (async () => {
+    try {
+      const { projectId, path, content } = req.body;
+      console.log(`[worker] Test request: projectId=${projectId}, path=${path}`);
+      
+      await persistFileToStorage(projectId, path, content);
+      res.status(200).json({ success: true, message: 'Test file persisted successfully' });
+    } catch (error: any) {
+      console.error('[worker] Test failed:', error);
+      res.status(500).json({ error: 'Test failed', details: error.message });
+    }
+  })();
+});
 
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`Worker service running on port ${PORT}`);
-  console.log(`S3 Bucket: ${BUCKET_NAME}`);
+  console.log(`S3/R2 Bucket: ${BUCKET_NAME}`);
+  console.log(`S3/R2 Endpoint: ${process.env.S3_ENDPOINT || 'default'}`);
+  console.log(`Region: ${process.env.AWS_REGION || 'auto'}`);
 });

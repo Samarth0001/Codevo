@@ -3,6 +3,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Collaboration styles */
+.user-cursor {
+  background-color: transparent !important;
+  border-left: 2px solid !important;
+  border-left-color: var(--user-color, #FF6B6B) !important;
+  animation: cursor-blink 1s infinite;
+}
+
+.user-cursor-before {
+  background-color: var(--user-color, #FF6B6B) !important;
+  opacity: 0.3;
+  width: 2px !important;
+  height: 1.2em !important;
+  display: inline-block !important;
+  margin-right: -2px !important;
+}
+
+.user-cursor-after {
+  background-color: var(--user-color, #FF6B6B) !important;
+  opacity: 0.3;
+  width: 2px !important;
+  height: 1.2em !important;
+  display: inline-block !important;
+  margin-left: -2px !important;
+}
+
+.user-selection {
+  background-color: var(--user-color, #FF6B6B) !important;
+  opacity: 0.2;
+}
+
+/* Dynamic user cursor colors */
+.user-cursor-color-FF6B6B { --user-color: #FF6B6B; }
+.user-cursor-color-4ECDC4 { --user-color: #4ECDC4; }
+.user-cursor-color-45B7D1 { --user-color: #45B7D1; }
+.user-cursor-color-96CEB4 { --user-color: #96CEB4; }
+.user-cursor-color-FFEAA7 { --user-color: #FFEAA7; }
+.user-cursor-color-DDA0DD { --user-color: #DDA0DD; }
+.user-cursor-color-98D8C8 { --user-color: #98D8C8; }
+.user-cursor-color-F7DC6F { --user-color: #F7DC6F; }
+.user-cursor-color-BB8FCE { --user-color: #BB8FCE; }
+.user-cursor-color-85C1E9 { --user-color: #85C1E9; }
+
+/* Dynamic user selection colors */
+.user-selection-color-FF6B6B { --user-color: #FF6B6B; }
+.user-selection-color-4ECDC4 { --user-color: #4ECDC4; }
+.user-selection-color-45B7D1 { --user-color: #45B7D1; }
+.user-selection-color-96CEB4 { --user-color: #96CEB4; }
+.user-selection-color-FFEAA7 { --user-color: #FFEAA7; }
+.user-selection-color-DDA0DD { --user-color: #DDA0DD; }
+.user-selection-color-98D8C8 { --user-color: #98D8C8; }
+.user-selection-color-F7DC6F { --user-color: #F7DC6F; }
+.user-selection-color-BB8FCE { --user-color: #BB8FCE; }
+.user-selection-color-85C1E9 { --user-color: #85C1E9; }
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 @layer base {
   :root {
     --background: 222.2 84% 4.9%;

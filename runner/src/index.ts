@@ -8,11 +8,14 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import cors from 'cors';
 import { TerminalManager } from './terminalManager';
 import { FileSystemManager } from './fileSystemManager';
+import { CollaborationManager } from './collaborationManager';
+import { userJoinedProject, userActivity, userLeftProject } from './services/activityTracker';
 import dotenv from 'dotenv';
 
 dotenv.config();
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const server = http.createServer(app);
 
@@ -24,15 +27,19 @@ const io = new SocketIOServer(server, {
   },
 });
 
-// Project rooms for multi-user collaboration
-interface ProjectRoom {
-  projectId: string;
-  users: Set<string>;
-  fileContents: Map<string, string>;
-  debounceTimers: Map<string, NodeJS.Timeout>;
-}
+// Initialize managers
+const terminalManager = new TerminalManager();
+const fileSystemManager = new FileSystemManager();
+const collaborationManager = new CollaborationManager(fileSystemManager);
 
-const projectRooms = new Map<string, ProjectRoom>();
+// Periodic cleanup of inactive terminal sessions (every 10 minutes)
+setInterval(() => {
+  const cleanedCount = terminalManager.cleanupInactiveSessions(30 * 60 * 1000); // 30 minutes
+  if (cleanedCount > 0) {
+    console.log(`[Runner] Cleaned up ${cleanedCount} inactive terminal sessions`);
+  }
+}, 10 * 60 * 1000); // Check every 10 minutes
+
 
 // Debounce function for file content updates
 function debounce<T extends (...args: any[]) => void>(
@@ -46,74 +53,82 @@ function debounce<T extends (...args: any[]) => void>(
   };
 }
 
-// Simple diff function for efficient updates
-function getDiff(oldContent: string, newContent: string): { type: 'full' | 'patch', data: any } {
-  // For now, send full content if difference is significant (>50% change)
-  // In production, use proper diff libraries like diff-match-patch
-  const maxLength = Math.max(oldContent.length, newContent.length);
-  const diffLength = Math.abs(oldContent.length - newContent.length);
-  
-  if (diffLength > maxLength * 0.5) {
-    return { type: 'full', data: newContent };
+// Function to sync files from workspace to collaboration manager
+async function syncWorkspaceToCollaboration(projectId: string) {
+  try {
+    const room = collaborationManager.getOrCreateRoom(projectId);
+    const structure = await fileSystemManager.getFileStructure();
+    
+    console.log(`[syncWorkspaceToCollaboration] 🔄 Syncing ${structure.length} files from /workspace to collaboration manager`);
+    
+    let syncedCount = 0;
+    for (const item of structure) {
+      if (item.type === 'file' && item.path) {
+        try {
+          const content = await fileSystemManager.getFileContent(item.path);
+          room.fileContents.set(item.path, content);
+          syncedCount++;
+          console.log(`[syncWorkspaceToCollaboration] 📄 Synced ${item.path} (${content.length} chars) to collaboration manager`);
+        } catch (error) {
+          console.error(`[syncWorkspaceToCollaboration] ❌ Error syncing ${item.path}:`, error);
+        }
+      }
+    }
+    
+    console.log(`[syncWorkspaceToCollaboration] ✅ Sync completed: ${syncedCount} files synced to collaboration manager for project ${projectId}`);
+  } catch (error) {
+    console.error(`[syncWorkspaceToCollaboration] ❌ Error syncing workspace:`, error);
   }
-  
-  return { type: 'full', data: newContent }; // Simplified for now
 }
-
-const terminalManager = new TerminalManager();
-const fileSystemManager = new FileSystemManager();
 
 io.on('connection', (socket: Socket) => {
   console.log(`[socket.io] Connected: ${socket.id}`);
   let currentProjectId: string | null = null;
+  let currentUserId: string | null = null;
 
   // Join project room
-  socket.on('join:project', ({ projectId }: { projectId: string }) => {
+  socket.on('join:project', ({ projectId, userInfo }: { projectId: string; userInfo?: { userId: string; username: string } }) => {
     console.log(`[socket.io] User ${socket.id} joining project: ${projectId}`);
     
     // Leave previous room if any
     if (currentProjectId) {
       socket.leave(currentProjectId);
-      const prevRoom = projectRooms.get(currentProjectId);
-      if (prevRoom) {
-        prevRoom.users.delete(socket.id);
-        if (prevRoom.users.size === 0) {
-          projectRooms.delete(currentProjectId);
-        }
+      collaborationManager.leaveRoom(socket, currentProjectId);
+      // Track user leaving previous project
+      if (currentUserId) {
+        userLeftProject(currentProjectId, currentUserId);
       }
     }
 
     // Join new room
     socket.join(projectId);
     currentProjectId = projectId;
+    currentUserId = userInfo?.userId || null;
 
-    // Get or create project room
-    let room = projectRooms.get(projectId);
-    if (!room) {
-      room = {
-        projectId,
-        users: new Set(),
-        fileContents: new Map(),
-        debounceTimers: new Map()
-      };
-      projectRooms.set(projectId, room);
+    // Join collaboration room
+    if (userInfo) {
+      collaborationManager.joinRoom(socket, projectId, userInfo);
+      // Track user joining project
+      userJoinedProject(projectId, userInfo.userId);
     }
 
-    room.users.add(socket.id);
-    console.log(`[socket.io] User ${socket.id} joined project ${projectId}. Total users: ${room.users.size}`);
+    console.log(`[socket.io] User ${socket.id} joined project ${projectId}`);
   });
 
-  // Project initialization
+  // Project initialization - Load base code from workspace
   socket.on('project:initialize', async ({ projectId }: { projectId: string }) => {
     console.log(`[socket.io] Initializing project: ${projectId}`);
     
     try {
-      // Check if workspace is empty and create default files
+      // Get current file structure from workspace
       const structure = await fileSystemManager.getFileStructure();
+      console.log(`[socket.io] Found ${structure.length} files in workspace`);
+      
       let filesWithContent: any[] = [];
 
       if (structure.length === 0) {
-        // Create default files
+        console.log(`[socket.io] Workspace is empty, creating default files`);
+        // Create default files if workspace is empty
         const defaultFiles = [
           { path: 'index.html', content: '<!DOCTYPE html>\n<html>\n<head>\n  <title>My Project</title>\n</head>\n<body>\n  <h1>Hello World!</h1>\n  <script src="main.js"></script>\n</body>\n</html>' },
           { path: 'main.js', content: 'console.log("Hello from Codevo!");\n\n// Start coding here...' },
@@ -137,25 +152,47 @@ io.on('connection', (socket: Socket) => {
             }))
         );
       } else {
-        // Get content for existing files
+        console.log(`[socket.io] Loading existing files from workspace`);
+        // Load content for existing files from workspace
         filesWithContent = await Promise.all(
           structure
             .filter(item => item.type === 'file' && item.path)
-            .map(async (file) => ({
-              ...file,
-              content: await fileSystemManager.getFileContent(file.path!)
-            }))
+            .map(async (file) => {
+              try {
+                const content = await fileSystemManager.getFileContent(file.path!);
+                console.log(`[socket.io] Loaded ${file.path} (${content.length} chars)`);
+                return {
+                  ...file,
+                  content
+                };
+              } catch (error) {
+                console.error(`[socket.io] Error loading ${file.path}:`, error);
+                return {
+                  ...file,
+                  content: ''
+                };
+              }
+            })
         );
       }
 
-      // Update room's file contents
-      const room = projectRooms.get(projectId);
-      if (room) {
-        filesWithContent.forEach(file => {
-          room.fileContents.set(file.path, file.content);
-        });
-      }
+      // Update collaboration manager with file contents
+      const room = collaborationManager.getOrCreateRoom(projectId);
+      filesWithContent.forEach(file => {
+        room.fileContents.set(file.path, file.content);
+        room.fileVersions.set(file.path, 1); // Initialize version
+      });
 
+      // Send structure and content to client
+      console.log(`[socket.io] Sending project initialization with ${filesWithContent.length} files`);
+      filesWithContent.forEach(file => {
+        console.log(`[socket.io] File ${file.path}:`, {
+          contentType: typeof file.content,
+          contentLength: file.content?.length,
+          contentPreview: typeof file.content === 'string' ? file.content.substring(0, 50) : file.content
+        });
+      });
+      
       socket.emit('project:initialized', {
         structure: structure.length === 0 ? filesWithContent.map(f => ({ id: f.id, name: f.name, type: f.type, path: f.path })) : structure,
         filesWithContent,
@@ -170,18 +207,116 @@ io.on('connection', (socket: Socket) => {
   });
 
   // Terminal Events
-  socket.on('terminal:start', ({ replId }: { replId: string }) => {
-    terminalManager.createPty(socket.id, replId, (data: string, pid: number) => {
+  socket.on('terminal:start', async ({ replId }: { replId: string }) => {
+    console.log(`[socket.io] Starting terminal session for ${socket.id} with replId: ${replId}`);
+    
+    // Sync file structure from collaboration manager to workspace if project is active
+    if (currentProjectId) {
+      try {
+        const room = collaborationManager.getOrCreateRoom(currentProjectId);
+        console.log(`[socket.io] 🔄 Syncing ${room.fileContents.size} files from collaboration manager to /workspace for terminal`);
+        
+        // Write all files from collaboration manager to workspace
+        for (const [path, content] of room.fileContents.entries()) {
+          await fileSystemManager.saveFileContent(path, content);
+          console.log(`[socket.io] 📄 Synced ${path} (${content.length} chars) to /workspace`);
+        }
+        console.log(`[socket.io] ✅ File sync completed for terminal - /workspace is now up to date`);
+      } catch (error) {
+        console.error(`[socket.io] ❌ Error syncing files for terminal:`, error);
+      }
+    }
+    
+    // Check if user already has a session for this project
+    const existingSessionId = terminalManager.getUserSession(currentUserId || socket.id, currentProjectId || 'default');
+    if (existingSessionId && terminalManager.hasSession(existingSessionId)) {
+      console.log(`[socket.io] User already has active session ${existingSessionId}, reusing`);
+      // Send session info to client
+      const sessionInfo = terminalManager.getSessionInfo(existingSessionId);
+      if (sessionInfo) {
+        socket.emit('terminal:info', sessionInfo);
+      }
+      return;
+    }
+    
+    const ptyProcess = terminalManager.createPty(socket.id, replId, (data: string, pid: number) => {
+      console.log(`[socket.io] Terminal data from ${socket.id}:`, JSON.stringify(data));
       socket.emit('terminal:data', { data, pid });
-    });
+    }, currentUserId || socket.id, currentProjectId || 'default');
+    
+    // Send session info to client after creating new session
+    const sessionInfo = terminalManager.getSessionInfo(socket.id);
+    if (sessionInfo) {
+      console.log(`[socket.io] Sending session info for new terminal:`, sessionInfo);
+      socket.emit('terminal:info', sessionInfo);
+    }
   });
 
   socket.on('terminal:input', ({ input }: { input: string }) => {
-    terminalManager.write(socket.id, input);
+    console.log(`[socket.io] Terminal input received from ${socket.id}:`, JSON.stringify(input));
+    
+    // Check for special commands (check for sync or files commands)
+    if (input.includes('sync') && (input.includes('\r') || input.includes('\n'))) {
+      // Special command to sync files from workspace to collaboration manager
+      if (currentProjectId) {
+        console.log(`[socket.io] 🔄 User requested sync: /workspace → collaboration manager for ${currentProjectId}`);
+        syncWorkspaceToCollaboration(currentProjectId);
+        // Send confirmation message with proper line breaks and prompt
+        terminalManager.write(socket.id, '\r\n\x1b[1;32m✓ Files synced from /workspace to editor\x1b[0m\r\nroot@codevo:/workspace# ');
+      }
+    } else if (input.includes('files') && (input.includes('\r') || input.includes('\n'))) {
+      // Special command to show current file structure
+      if (currentProjectId) {
+        const room = collaborationManager.getOrCreateRoom(currentProjectId);
+        const fileList = Array.from(room.fileContents.keys());
+        const fileOutput = fileList.length > 0 
+          ? `\r\n\x1b[1;36mCurrent files in editor:\x1b[0m\r\n${fileList.map(f => `  • ${f}`).join('\r\n')}\r\nroot@codevo:/workspace# `
+          : '\r\n\x1b[1;33mNo files in editor\x1b[0m\r\nroot@codevo:/workspace# ';
+        terminalManager.write(socket.id, fileOutput);
+      }
+    } else {
+      // Regular input - send to terminal
+      terminalManager.write(socket.id, input);
+    }
   });
 
   socket.on('terminal:clear', () => {
+    console.log(`[socket.io] Clearing terminal session for ${socket.id}`);
     terminalManager.clear(socket.id);
+  });
+
+  socket.on('terminal:resize', ({ cols, rows }: { cols: number; rows: number }) => {
+    console.log(`[socket.io] Resizing terminal for ${socket.id} to ${cols}x${rows}`);
+    terminalManager.resize(socket.id, cols, rows);
+  });
+
+  socket.on('terminal:info', () => {
+    const info = terminalManager.getSessionInfo(socket.id);
+    socket.emit('terminal:info', info);
+  });
+
+  socket.on('terminal:reconnect', () => {
+    console.log(`[socket.io] Terminal reconnection request from ${socket.id}`);
+    
+    // Check if user has an existing session for this project
+    const existingSessionId = terminalManager.getUserSession(currentUserId || socket.id, currentProjectId || 'default');
+    if (existingSessionId && terminalManager.hasSession(existingSessionId)) {
+      console.log(`[socket.io] Reconnecting user to existing session ${existingSessionId}`);
+      const sessionInfo = terminalManager.getSessionInfo(existingSessionId);
+      if (sessionInfo) {
+        socket.emit('terminal:info', sessionInfo);
+        socket.emit('terminal:data', { 
+          data: '\r\n\x1b[1;32m[Reconnected] Terminal session restored\x1b[0m\r\nroot@codevo:/workspace# ', 
+          pid: sessionInfo.pid 
+        });
+      }
+    } else {
+      console.log(`[socket.io] No existing session found for user, starting new session`);
+      socket.emit('terminal:data', { 
+        data: '\r\n\x1b[1;33m[No existing session] Starting new terminal session\x1b[0m\r\nroot@codevo:/workspace# ', 
+        pid: 0 
+      });
+    }
   });
 
   // File System Events
@@ -197,14 +332,23 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('files:create', async ({ path, isFolder }: { path: string; isFolder?: boolean }) => {
     try {
-      const file = await fileSystemManager.createFile(path, isFolder || false);
-      
-      // Broadcast to all users in the project
-      if (currentProjectId) {
-        socket.to(currentProjectId).emit('files:created', file);
+      if (!currentProjectId) {
+        socket.emit('files:error', { message: 'No active project' });
+        return;
       }
+
+      const result = await collaborationManager.handleFileCreate(
+        socket,
+        currentProjectId,
+        path,
+        isFolder || false,
+        socket.id
+      );
       
-      socket.emit('files:created', file);
+      // Track user activity
+      userActivity(currentProjectId);
+      
+      socket.emit('files:created', result.file);
     } catch (error) {
       console.error('Error creating file:', error);
       socket.emit('files:error', { message: 'Failed to create file' });
@@ -213,18 +357,20 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('files:delete', async ({ path }: { path: string }) => {
     try {
-      await fileSystemManager.deleteFile(path);
-      
-      // Remove from room's file contents
-      const room = projectRooms.get(currentProjectId!);
-      if (room) {
-        room.fileContents.delete(path);
+      if (!currentProjectId) {
+        socket.emit('files:error', { message: 'No active project' });
+        return;
       }
+
+      await collaborationManager.handleFileDelete(
+        socket,
+        currentProjectId,
+        path,
+        socket.id
+      );
       
-      // Broadcast to all users in the project
-      if (currentProjectId) {
-        socket.to(currentProjectId).emit('files:deleted', path);
-      }
+      // Track user activity
+      userActivity(currentProjectId);
       
       socket.emit('files:deleted', path);
     } catch (error) {
@@ -235,22 +381,21 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('files:rename', async ({ oldPath, newPath }: { oldPath: string; newPath: string }) => {
     try {
-      await fileSystemManager.renameFile(oldPath, newPath);
-      
-      // Update room's file contents
-      const room = projectRooms.get(currentProjectId!);
-      if (room) {
-        const content = room.fileContents.get(oldPath);
-        if (content !== undefined) {
-          room.fileContents.delete(oldPath);
-          room.fileContents.set(newPath, content);
-        }
+      if (!currentProjectId) {
+        socket.emit('files:error', { message: 'No active project' });
+        return;
       }
+
+      await collaborationManager.handleFileRename(
+        socket,
+        currentProjectId,
+        oldPath,
+        newPath,
+        socket.id
+      );
       
-      // Broadcast to all users in the project
-      if (currentProjectId) {
-        socket.to(currentProjectId).emit('files:renamed', { oldPath, newPath });
-      }
+      // Track user activity
+      userActivity(currentProjectId);
       
       socket.emit('files:renamed', { oldPath, newPath });
     } catch (error) {
@@ -269,55 +414,44 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // Debounced file content saving with broadcasting
+  // Handle file content changes with collaboration
   socket.on('files:saveContent', async ({ path, content }: { path: string; content: string }) => {
     try {
-      const room = projectRooms.get(currentProjectId!);
-      if (!room) {
-        console.error(`[socket.io] No room found for project ${currentProjectId}`);
+      if (!currentProjectId) {
+        console.error(`[socket.io] No current project for user ${socket.id}`);
         return;
       }
 
-      // Update room's file contents
-      const oldContent = room.fileContents.get(path) || '';
-      room.fileContents.set(path, content);
+      // Use collaboration manager to handle the change
+      const result = await collaborationManager.handleFileChange(
+        socket, 
+        currentProjectId, 
+        path, 
+        content,
+        socket.id
+      );
 
-      // Broadcast to other users in the project
-      if (currentProjectId) {
-        const diff = getDiff(oldContent, content);
-        socket.to(currentProjectId).emit('files:contentUpdated', { 
-          path, 
-          content: diff.data,
-          diffType: diff.type,
-          updatedBy: socket.id 
-        });
-      }
+      // Save to file system
+      await fileSystemManager.saveFileContent(path, content);
 
-      // Debounce persistence to worker
-      const existingTimer = room.debounceTimers.get(path);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
+      // Track user activity
+      userActivity(currentProjectId);
 
-      const debouncedSave = debounce(async (filePath: string, fileContent: string) => {
-        try {
-          await fileSystemManager.saveFileContent(filePath, fileContent);
-          console.log(`[socket.io] Debounced save completed for ${filePath}`);
-          
-          // TODO: Send to worker for persistence
-          // workerSocket.emit('persist:file', { path: filePath, content: fileContent });
-        } catch (error) {
-          console.error(`[socket.io] Error in debounced save for ${filePath}:`, error);
-        }
-      }, 500);
-
-      const timer = setTimeout(() => debouncedSave(path, content), 500);
-      room.debounceTimers.set(path, timer);
-
-      socket.emit('files:contentSaved', { path });
+      socket.emit('files:contentSaved', { path, version: result.version });
     } catch (error) {
       console.error('Error saving file content:', error);
       socket.emit('files:error', { message: 'Failed to save file content' });
+    }
+  });
+
+  // Handle user awareness updates
+  socket.on('user:awareness', (awareness: { cursor?: any; selection?: any; activeFile?: string }) => {
+    if (currentProjectId) {
+      collaborationManager.updateAwareness(socket, currentProjectId, awareness);
+      // Track user activity
+      if (currentProjectId) {
+        userActivity(currentProjectId);
+      }
     }
   });
 
@@ -326,23 +460,42 @@ io.on('connection', (socket: Socket) => {
     
     // Clean up user from room
     if (currentProjectId) {
-      const room = projectRooms.get(currentProjectId);
-      if (room) {
-        room.users.delete(socket.id);
-        if (room.users.size === 0) {
-          // Clean up empty room
-          projectRooms.delete(currentProjectId);
-          console.log(`[socket.io] Removed empty room for project ${currentProjectId}`);
-        }
+      collaborationManager.leaveRoom(socket, currentProjectId);
+      // Track user leaving project
+      if (currentUserId) {
+        userLeftProject(currentProjectId, currentUserId);
       }
     }
     
-    terminalManager.clear(socket.id);
+    // Don't immediately clear terminal session to allow for reconnection
+    // Instead, set a timeout to clear it after a delay
+    setTimeout(() => {
+      console.log(`[socket.io] Clearing terminal session for ${socket.id} after disconnect timeout`);
+      terminalManager.clear(socket.id);
+    }, 10000); // Keep terminal alive for 10 seconds to allow reconnection
   });
 });
 
 app.get('/', (_, res) => {
   res.send('Runner backend is running');
+});
+
+// Endpoint to send last update info to server
+app.post('/sendLastUpdateInfo', (req, res) => {
+  const { projectId } = req.body;
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId is required' });
+    return;
+  }
+  
+  collaborationManager.sendLastUpdateInfo(projectId)
+    .then(() => {
+      res.json({ success: true, message: 'Last update info sent successfully' });
+    })
+    .catch((error) => {
+      console.error('[Runner] Error sending last update info:', error);
+      res.status(500).json({ error: 'Failed to send last update info' });
+    });
 });
 
 const PORT = process.env.PORT || 3000;

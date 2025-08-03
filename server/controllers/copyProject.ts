@@ -76,6 +76,8 @@ export async function copyTemplateToProjectR2(
 export const copyProject = async(req: Request, res: Response) => {
     const {uniqueId, selectedTemplate} = req.body;
 
+    console.log('copyProject called with:', { uniqueId, selectedTemplate });
+
     if(!uniqueId || !selectedTemplate){
         return res.status(400).json({
             success: false,
@@ -83,10 +85,7 @@ export const copyProject = async(req: Request, res: Response) => {
         })
     }
 
-    
-
-    // await copyTemplateToProjectR2("codevo",`Base_Code/${selectedTemplate}`,`Project_Code/${uniqueId}`)
-    await copyTemplateToProjectR2("codevo",`Base_Code/node-js/`,`Project_Code/${uniqueId}`)
+    await copyTemplateToProjectR2("codevo",`Base_Code/${selectedTemplate}/`,`Project_Code/${uniqueId}`)
     console.log("Project copied successfully!")
 
     res.status(200).json({

@@ -2,14 +2,63 @@ import { Request, Response } from 'express';
 import fs from "fs";
 import yaml from "yaml";
 import path from "path";
-// import { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } from "@kubernetes/client-node";
+import mongoose from "mongoose";
+import Project from '../models/Project';
+import User from '../models/User';
+import { userJoinedProject, isProjectActive } from '../services/activityTracker';
+const Template = require('../models/Template');
 
+// Extend Request type to include user property from auth middleware
+interface AuthenticatedRequest extends Request {
+    user?: {
+        id: string;
+        email: string;
+    };
+}
 
 interface CreateProjectRequestBody {
     uniqueId: string;
   }
 
-export const createProject = async(req: Request, res: Response): Promise<void> => {
+// Database operations function
+const createProjectInDB = async (projectData: {
+    uniqueId: string;
+    projectName: string;
+    description: string;
+    templateId: string;
+    userId: string;
+    visibility: string;
+    tags: string[];
+}) => {
+    const { uniqueId, projectName, description, templateId, userId, visibility, tags } = projectData;
+    
+    console.log('createProjectInDB - creating MongoDB document with templateId:', templateId);
+    
+    // 1. Create Project in MongoDB
+    const projectDoc = await Project.create({
+        projectId: uniqueId,
+        projectName,
+        description,
+        template: templateId,
+        projectCreater: userId, 
+        visibility,
+        tags,
+        collaborators: [userId],
+        lastUpdatedAt: new Date(),
+        lastUpdatedBy: userId,
+    });
+    
+    console.log('createProjectInDB - MongoDB document created:', projectDoc);
+    
+    // 2. Add project to user's projects array
+    await User.findByIdAndUpdate(userId, { $push: { projects: projectDoc._id } });
+    
+    return projectDoc;
+};
+
+
+// Kubernetes operations function
+const createKubernetesResources = async (projectId: string) => {
     // Dynamic import for CommonJS compatibility
     const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
 
@@ -19,7 +68,7 @@ export const createProject = async(req: Request, res: Response): Promise<void> =
     const appsV1Api = kubeconfig.makeApiClient(AppsV1Api);
     const networkingV1Api = kubeconfig.makeApiClient(NetworkingV1Api);
 
-    // Updated utility function to handle multi-document YAML files
+    // Utility function to handle multi-document YAML files
     const readAndParseKubeYaml = (filePath: string, projectId: string): Array<any> => {
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const docs = yaml.parseAllDocuments(fileContent).map((doc) => {
@@ -30,44 +79,288 @@ export const createProject = async(req: Request, res: Response): Promise<void> =
             return yaml.parse(docString);
         });
         return docs;
-    };  
-      
-    const { uniqueId} = req.body as CreateProjectRequestBody; // Assume a unique identifier for each user
-    const namespace = "default"; // Assuming a default namespace, adjust as needed
+    };
 
-    try {
-        const kubeManifests = readAndParseKubeYaml(path.join(__dirname, "../service.yaml"), uniqueId);
-        for (const manifest of kubeManifests) {
+    const namespace = "default"; // Assuming a default namespace, adjust as needed
+    
+    console.log('createKubernetesResources - creating K8s resources for project:', projectId);
+    
+    // Read and parse Kubernetes manifests
+    const kubeManifests = readAndParseKubeYaml(path.join(__dirname, "../service.yaml"), projectId);
+    
+    // Create Kubernetes resources with error handling for already exists
+    for (const manifest of kubeManifests) {
+        try {
             switch (manifest.kind) {
                 case "Deployment":
-                    // await appsV1Api.createNamespacedDeployment(namespace, manifest);
                     await appsV1Api.createNamespacedDeployment({
                         namespace,
                         body: manifest
-                      });
-                      
+                    });
+                    console.log(`createKubernetesResources - Created Deployment for ${projectId}`);
                     break;
                 case "Service":
-                    // await coreV1Api.createNamespacedService(namespace, manifest);
                     await coreV1Api.createNamespacedService({
                         namespace,
                         body: manifest
-                      });
-                      
+                    });
+                    console.log(`createKubernetesResources - Created Service for ${projectId}`);
                     break;
                 case "Ingress":
                     await networkingV1Api.createNamespacedIngress({
                         namespace,
                         body: manifest
                     });
+                    console.log(`createKubernetesResources - Created Ingress for ${projectId}`);
                     break;
                 default:
-                    console.log(`Unsupported kind: ${manifest.kind}`);
+                    console.log(`createKubernetesResources - Unsupported kind: ${manifest.kind}`);
+            }
+        } catch (error: any) {
+            // If resource already exists, log it and continue
+            if (error.statusCode === 409) {
+                console.log(`createKubernetesResources - ${manifest.kind} for ${projectId} already exists, skipping...`);
+            } else {
+                // Re-throw other errors
+                throw error;
             }
         }
-        res.status(200).send({ message: "Resources created successfully" });
-    } catch (error) {
-        console.error("Failed to create resources", error);
-        res.status(500).send({ message: "Failed to create resources" });
     }
-}
+    
+    console.log('createKubernetesResources - All K8s resources created successfully for project:', projectId);
+};
+
+// Get project details by projectId
+export const getProjectDetails = async (req: Request, res: Response) => {
+    const { projectId } = req.params;
+
+    try {
+        const project = await Project.findOne({ projectId }).populate('template');
+        
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            project: {
+                projectId: project.projectId,
+                projectName: project.projectName,
+                description: project.description,
+                templateId: project.template,
+                visibility: project.visibility,
+                tags: project.tags,
+                collaborators: project.collaborators
+            }
+        });
+    } catch (error: any) {
+        console.error('Error getting project details:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get project details',
+            error: error.message
+        });
+    }
+};
+
+// Join existing project (for invited users or returning users)
+export const joinProject = async (req: Request, res: Response) => {
+    const { projectId, userId } = req.body;
+
+    try {
+        // Check if project exists
+        const project = await Project.findOne({ projectId });
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
+
+        // Check if user is a collaborator
+        if (!project.collaborators.some(collaborator => collaborator.toString() === userId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'User is not a collaborator on this project'
+            });
+        }
+
+        // Add to active projects in Redis
+        await userJoinedProject(projectId, userId);
+
+        res.status(200).json({
+            success: true,
+            message: 'Successfully joined project',
+            project: {
+                projectId: project.projectId,
+                projectName: project.projectName,
+                description: project.description,
+                templateId: project.template,
+                visibility: project.visibility,
+                tags: project.tags
+            }
+        });
+    } catch (error: any) {
+        console.error('Error joining project:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to join project',
+            error: error.message
+        });
+    }
+};
+
+// Check if project is active (using Redis)
+export const checkProjectStatus = async (req: Request, res: Response) => {
+    const { projectId } = req.params;
+
+    try {
+        // Check if project exists in database
+        const project = await Project.findOne({ projectId });
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
+
+        // Check if project is active using Redis
+        const isActive = await isProjectActive(projectId);
+
+        res.status(200).json({
+            success: true,
+            isActive,
+            project: {
+                projectId: project.projectId,
+                projectName: project.projectName,
+                description: project.description,
+                templateId: project.template,
+                visibility: project.visibility,
+                tags: project.tags,
+                collaborators: project.collaborators
+            }
+        });
+    } catch (error: any) {
+        console.error('Error checking project status:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check project status',
+            error: error.message
+        });
+    }
+};
+
+// Update project's last modified timestamp and user
+export const updateProjectLastModified = async (req: Request, res: Response) => {
+    const { projectId, userId, lastUpdatedAt } = req.body;
+
+    try {
+        const result = await Project.findOneAndUpdate(
+            { projectId },
+            {
+                lastUpdatedAt: lastUpdatedAt ? new Date(lastUpdatedAt) : new Date(),
+                lastUpdatedBy: userId
+            },
+            { new: true }
+        );
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: 'Project not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Project last modified updated successfully'
+        });
+    } catch (error: any) {
+        console.error('Error updating project last modified:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update project last modified',
+            error: error.message
+        });
+    }
+};
+
+// Main controller function
+export const createProject = async(req: Request, res: Response): Promise<any> => {
+    const { uniqueId, projectName, description = '', templateId, userId, visibility = 'private', tags = [] } = req.body;
+
+    console.log('CreateProject - received data:', {
+        uniqueId,
+        projectName,
+        description,
+        templateId,
+        userId,
+        visibility,
+        tags
+    });
+
+    // Validate that templateId is a valid MongoDB ObjectId
+    if (!templateId || !mongoose.Types.ObjectId.isValid(templateId)) {
+        console.error('CreateProject - Invalid templateId:', templateId);
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid templateId provided' 
+        });
+    }
+
+    // Validate that userId is a valid MongoDB ObjectId
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        console.error('CreateProject - Invalid userId:', userId);
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid userId provided' 
+        });
+    }
+
+    try {
+        // Check if project already exists in database
+        const existingProject = await Project.findOne({ projectId: uniqueId });
+        
+        let projectDoc;
+        
+        if (existingProject) {
+            // Project exists, just create Kubernetes resources
+            console.log('CreateProject - Project exists, creating only Kubernetes resources');
+            projectDoc = existingProject;
+        } else {
+            // Project doesn't exist, create it in database
+            console.log('CreateProject - Creating new project in database');
+            projectDoc = await createProjectInDB({
+                uniqueId,
+                projectName,
+                description,
+                templateId,
+                userId,
+                visibility,
+                tags
+            });
+        }
+
+        // 2. Create Kubernetes resources
+        await createKubernetesResources(uniqueId);
+
+        // 3. Add project to Redis active projects
+        await userJoinedProject(uniqueId, userId);
+
+        res.status(200).send({ 
+            success: true,
+            message: existingProject ? "Project resources created successfully" : "Project and resources created successfully", 
+            project: projectDoc 
+        });
+    } catch (error: any) {
+        console.error("Failed to create project or resources", error);
+        res.status(500).send({ 
+            success: false,
+            message: "Failed to create project or resources",
+            error: error.message 
+        });
+    }
+};

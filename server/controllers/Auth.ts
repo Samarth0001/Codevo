@@ -393,8 +393,18 @@ const userDetails = async(req:AuthenticationRequest,res: Response) => {
                 message: "Invalid User ID!"
             })
         }
-        // Check if user exists or not
-        const user = await User.findById(userID).populate("additionalDetails");
+        // Check if user exists or not and populate projects with all necessary data
+        const user = await User.findById(userID)
+            .populate("additionalDetails")
+            .populate({
+                path: "projects",
+                populate: [
+                    { path: "template", select: "name description" },
+                    { path: "projectCreater", select: "name email" },
+                    { path: "collaborators", select: "name email" },
+                    { path: "lastUpdatedBy", select: "name email" }
+                ]
+            });
         if(!user){
             return res.status(403).json({
                 success : false,
@@ -402,9 +412,32 @@ const userDetails = async(req:AuthenticationRequest,res: Response) => {
             })
         }
 
+        // Transform projects data to match frontend expectations
+        const transformedProjects = user.projects.map((project: any) => ({
+            id: project.projectId,
+            name: project.projectName,
+            description: project.description || `A ${project.template?.name || 'project'} created with Codevo`,
+            language: project.template?.name || 'Unknown',
+            lastUpdated: formatTimeAgo(project.lastUpdatedAt || project.createdAt),
+            lastUpdatedBy: project.lastUpdatedBy?.name || project.projectCreater?.name || 'Unknown',
+            stars: 0, // Placeholder - could be implemented later
+            forks: project.collaborators?.length || 0,
+            projectId: project.projectId,
+            createdAt: project.createdAt,
+            lastUpdatedAt: project.lastUpdatedAt || project.createdAt,
+            visibility: project.visibility,
+            tags: project.tags || []
+        }));
+
+        // Add transformed projects to user object
+        const userWithProjects = {
+            ...user.toObject(),
+            projects: transformedProjects
+        };
+
         res.status(200).json({
             success: true,
-            user: user,
+            user: userWithProjects,
             message: "Details Fetched Successfully!"
         })
     }   
@@ -414,6 +447,20 @@ const userDetails = async(req:AuthenticationRequest,res: Response) => {
             message: "Error while fetcing user details!"
         })
     }
+}
+
+// Helper function to format time ago
+function formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    if (diffInDays < 30) return `${Math.floor(diffInDays / 7)}w ago`;
+    return `${Math.floor(diffInDays / 30)}m ago`;
 }
 
 const logout = (req:AuthenticationRequest ,res: Response) => {

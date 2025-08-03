@@ -24,4 +24,31 @@ async function mailSender(email:string, title:string, body:string) : Promise<any
     }
 }
 
+// Send invitation email
+export const sendInvitationEmail = async (email: string, projectName: string, inviteLink: string) => {
+    const title = `You've been invited to collaborate on ${projectName}`;
+    const body = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #3b82f6;">You've been invited to collaborate!</h2>
+            <p>You've been invited to collaborate on the project: <strong>${projectName}</strong></p>
+            <p>Click the button below to join the project and start collaborating in real-time:</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${inviteLink}" 
+                   style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    Join Project
+                </a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px;">
+                This invitation link will expire in 24 hours. If you don't have an account, you'll be prompted to create one.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 12px;">
+                If you didn't expect this invitation, you can safely ignore this email.
+            </p>
+        </div>
+    `;
+    
+    return await mailSender(email, title, body);
+};
+
 export default mailSender

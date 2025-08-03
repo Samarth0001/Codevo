@@ -122,7 +122,13 @@ export class FileSystemManager {
 
   async getFileContent(filePath: string): Promise<string> {
     const fullPath = path.join(this.workspacePath, filePath);
-    return await fs.promises.readFile(fullPath, 'utf-8');
+    const content = await fs.promises.readFile(fullPath, 'utf-8');
+    console.log(`[FileSystemManager] Read file ${filePath}:`, {
+      contentType: typeof content,
+      contentLength: content.length,
+      contentPreview: content.substring(0, 50)
+    });
+    return content;
   }
 
   async saveFileContent(filePath: string, content: string): Promise<void> {

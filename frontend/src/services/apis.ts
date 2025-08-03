@@ -15,5 +15,16 @@ export const authEndpoints = {
 
 export const projectEndPoints = {
     COPY_PROJECT_API : BASE_URL + '/copyProject',
-    CREATE_PROJECT_API : BASE_URL + '/createProject'
+    CREATE_PROJECT_API : BASE_URL + '/createProject',
+    GET_TEMPLATES_API : BASE_URL + '/getTemplates',
+    GET_PROJECT_DETAILS_API : BASE_URL + '/project',
+    GET_PROJECT_STATUS_API : BASE_URL + '/projectStatus',
+    JOIN_PROJECT_API : BASE_URL + '/joinProject',
+
+}
+
+export const invitationEndPoints = {
+    CREATE_INVITATION_API : BASE_URL + '/invite/create',
+    GET_INVITATION_DETAILS_API : BASE_URL + '/invite/details',
+    ACCEPT_INVITATION_API : BASE_URL + '/invite/accept'
 }

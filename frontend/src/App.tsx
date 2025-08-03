@@ -11,6 +11,7 @@ import OpenRoute from "./components/auth/OpenRoute";
 import Home from "./components/dashboard/Home";
 import TemplateSelector from "./components/dashboard/TemplateSelector";
 import CodingPage from "./pages/CodingPage";
+import InvitePage from "./pages/InvitePage";
 
 const App = () => (
         <Routes>
@@ -42,6 +43,7 @@ const App = () => (
           <Route path='/verify-email' element={<VerifyEmail/>} />
 
           <Route path="/coding/:projectId" element={<CodingPage/>}/>
+          <Route path="/invite/:token" element={<InvitePage/>}/>
 
           <Route path="*" element={<NotFound />} />
         </Routes>

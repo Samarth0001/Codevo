@@ -1,25 +1,33 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/button-custom";
 
 interface ProjectCardProps {
+  id: string;
   name: string;
   description: string;
   language: string;
   lastUpdated: string;
+  lastUpdatedBy: string;
   stars: number;
   forks: number;
+  projectId?: string;
 }
 
-const ProjectCard = ({ 
-  name, 
-  description, 
-  language, 
+const ProjectCard = ({
+  id,
+  name,
+  description,
+  language,
   lastUpdated,
+  lastUpdatedBy,
   stars,
-  forks 
+  forks,
+  projectId
 }: ProjectCardProps) => {
   const [isStarred, setIsStarred] = useState(false);
+  const navigate = useNavigate();
 
   const toggleStar = () => {
     setIsStarred(!isStarred);
@@ -75,13 +83,23 @@ const ProjectCard = ({
             <span>{forks}</span>
           </div>
         </div>
-        <time className="text-xs text-gray-400">{lastUpdated}</time>
+        <div className="text-right">
+          <time className="text-xs text-gray-400 block">{lastUpdated}</time>
+          <span className="text-xs text-gray-500">by {lastUpdatedBy}</span>
+        </div>
       </div>
       <div className="mt-4 flex justify-between">
-        <Button variant="outline" className="text-xs py-1 px-3">
+        <Button 
+          variant="outline" 
+          className="text-xs py-1 px-3"
+          onClick={() => navigate(`/coding/${projectId || id}`)}
+        >
           View Code
         </Button>
-        <Button className="text-xs py-1 px-3 bg-codevo-blue hover:bg-codevo-blue/90">
+        <Button 
+          className="text-xs py-1 px-3 bg-codevo-blue hover:bg-codevo-blue/90"
+          onClick={() => navigate(`/coding/${projectId || id}`)}
+        >
           Open IDE
         </Button>
       </div>

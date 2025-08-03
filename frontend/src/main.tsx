@@ -5,6 +5,7 @@ import './index.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './context/AuthContext.tsx';
 import { EditorProvider } from './context/EditorContext.tsx';
+import { TemplateProvider } from './context/TemplateContext.tsx';
 
 // Import Monaco setup early to configure workers properly
 import './monaco-setup';
@@ -12,10 +13,12 @@ import './monaco-setup';
 createRoot(document.getElementById("root")!).render(
 <AuthProvider>
     <EditorProvider>
-      <BrowserRouter>
-          <Toaster />
-          <App />
-      </BrowserRouter>
+      <TemplateProvider>
+        <BrowserRouter>
+            <Toaster />
+            <App />
+        </BrowserRouter>
+      </TemplateProvider>
     </EditorProvider>
 </AuthProvider>
 );

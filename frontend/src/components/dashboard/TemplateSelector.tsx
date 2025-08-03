@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { copyBaseCode } from "@/services/operations/ProjectAPI";
 import { useContext } from "react";
 import { AuthContext } from "@/context/AuthContext";
+import { useTemplates } from "@/context/TemplateContext";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -66,85 +67,77 @@ const generateRandomName = (): string => {
     { id: "github", name: "Import from GitHub" },
   ];
 
-  const templates = [
-    { 
-      id: "python", 
-      name: "Python", 
-      category: "favorites",
+  const { templates, loading: templatesLoading, error: templatesError } = useTemplates();
+
+  // Transform templates to match the expected format
+  const transformedTemplates = React.useMemo(() => 
+    templates.map(template => ({
+      id: template._id,
+      name: template.name,
+      category: "templates", // All templates from DB are in templates category
       source: "replit",
-      technology: "python"
-    },
-    { 
-      id: "nodejs", 
-      name: "Node.js", 
-      category: "favorites",
-      source: "replit",
-      technology: "nodejs"
-    },
-    { 
-      id: "c", 
-      name: "C", 
-      category: "favorites",
-      source: "replit",
-      technology: "c"
-    },
-    { 
-      id: "html", 
-      name: "HTML, CSS, JS", 
-      category: "templates",
-      source: "replit",
-      technology: "html"
-    },
-    { 
-      id: "cpp", 
-      name: "C++", 
-      category: "templates",
-      source: "replit",
-      technology: "cpp"
-    },
-    { 
-      id: "react", 
-      name: "React", 
-      category: "templates",
-      source: "replit",
-      technology: "react"
-    },
-    { 
-      id: "java", 
-      name: "Java", 
-      category: "templates",
-      source: "replit",
-      technology: "java"
-    },
-    { 
-      id: "ruby", 
-      name: "Ruby", 
-      category: "templates",
-      source: "replit",
-      technology: "ruby"
-    },
-  ];
+      technology: template.language,
+      slug: template.slug,
+      description: template.description,
+      icon: template.icon
+    })), [templates]
+  );
 
   // Filter templates based on search query
   useEffect(() => {
-    const filtered = templates.filter(template => {
+    const filtered = transformedTemplates.filter(template => {
       const matchesSearch = searchQuery.trim() === '' || 
         template.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSearch;
     });
     setFilteredTemplates(filtered);
-  }, [searchQuery]);
+  }, [searchQuery, transformedTemplates]);
 
 
-  const {setLoading} = useContext(AuthContext)
+  const { setLoading, user } = useContext(AuthContext);
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     const uniqueId = `${projectTitle}-${uuidv4()}`;
     setProjectId(uniqueId);
-    console.log(`Creating project with title: ${projectTitle}, public: ${isPublic}, template: ${selectedTemplate}`);
-    // an api call will be done to initiate new project and then redirect to Coding page
-    copyBaseCode({uniqueId,selectedTemplate},setLoading,navigate);
-    // onCancel();
+    const projectName = projectTitle;
+    const description = '';
+    const templateId = selectedTemplate; // This is the MongoDB ObjectId
+    const userId = user?._id;
+    const visibility = isPublic ? 'public' : 'private';
+    const tags = [];
+    
+    if (!userId) {
+      alert('User not found. Please log in.');
+      return;
+    }
+
+    // Get the selected template to extract the slug for copyBaseCode
+    const selectedTemplateData = transformedTemplates.find(t => t.id === selectedTemplate);
+    if (!selectedTemplateData) {
+      alert('Template not found. Please select a template.');
+      return;
+    }
+
+    console.log('Sending to copyBaseCode:', { 
+      uniqueId, 
+      selectedTemplate: selectedTemplateData.slug,
+      templateId: templateId // MongoDB ObjectId for project creation
+    });
+    
+    // 1. Copy base code (using template slug for R2 path)
+    await copyBaseCode({ uniqueId, selectedTemplate: selectedTemplateData.slug }, setLoading, () => {
+      // 2. Navigate to CodingPage with all project details in state (using ObjectId)
+      navigate(`/coding/${uniqueId}`, {
+        state: {
+          projectName,
+          description,
+          templateId, // This is the MongoDB ObjectId
+          userId,
+          visibility,
+          tags
+        }
+      });
+    });
   };
 
   // Function to handle template selection
@@ -159,59 +152,40 @@ const generateRandomName = (): string => {
   }
   useOnClickOutside(ref, handleClickOutside)
 
-  // Function to get the appropriate icon for each template
-  const getTemplateIcon = (templateId: string) => {
-    switch(templateId) {
-      case "python":
-        return (
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="Python" className="w-5 h-5" />
-          </div>
-        );
-      case "nodejs":
-        return (
-          <div className="w-8 h-8 bg-green-600 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="Node.js" className="w-5 h-5" />
-          </div>
-        );
-      case "c":
-        return (
-          <div className="w-8 h-8 bg-gray-500 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="C" className="w-5 h-5" />
-          </div>
-        );
-      case "html":
-        return (
-          <div className="w-8 h-8 bg-orange-500 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="HTML" className="w-5 h-5" />
-          </div>
-        );
-      case "cpp":
-        return (
-          <div className="w-8 h-8 bg-blue-400 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="C++" className="w-5 h-5" />
-          </div>
-        );
-      case "react":
-        return (
-          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="React" className="w-5 h-5" />
-          </div>
-        );
-      case "java":
-        return (
-          <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="Java" className="w-5 h-5" />
-          </div>
-        );
-      case "ruby":
-        return (
-          <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
-            <img src="/lovable-uploads/caaaed66-a113-403c-8cf9-267e8b15dd7d.png" alt="Ruby" className="w-5 h-5" />
-          </div>
-        );
-      default:
-        return <div className="w-8 h-8 bg-gray-500 rounded"></div>;
+  // Function to render template icon dynamically
+  const renderTemplateIcon = (template: any) => {
+    if (template.icon) {
+      // If template has an icon, render it
+      return (
+        <div className="w-8 h-8 bg-gray-600 rounded flex items-center justify-center">
+          <img src={template.icon} alt={template.name} className="w-5 h-5" />
+        </div>
+      );
+    } else {
+      // Fallback: use language-based color coding
+      const getLanguageColor = (language: string) => {
+        switch(language.toLowerCase()) {
+          case "python": return "bg-blue-600";
+          case "nodejs":
+          case "javascript": return "bg-green-600";
+          case "c": return "bg-gray-500";
+          case "html":
+          case "css": return "bg-orange-500";
+          case "cpp": return "bg-blue-400";
+          case "react": return "bg-blue-500";
+          case "java": return "bg-red-500";
+          case "ruby": return "bg-red-600";
+          default: return "bg-gray-500";
+        }
+      };
+      
+      return (
+        <div className={`w-8 h-8 ${getLanguageColor(template.technology)} rounded flex items-center justify-center`}>
+          <span className="text-white text-xs font-bold">
+            {template.technology?.charAt(0)?.toUpperCase() || '?'}
+          </span>
+        </div>
+      );
     }
   };
 
@@ -268,7 +242,7 @@ const generateRandomName = (): string => {
                   :
                   <div className="absolute left-3 top-1 h-2 w-2">
                     {
-                      getTemplateIcon(selectedTemplate)
+                      renderTemplateIcon(transformedTemplates.find(t => t.id === selectedTemplate) || {})
                     }
                   </div>
                   }  
@@ -287,58 +261,39 @@ const generateRandomName = (): string => {
                 {/* Dropdown Results */}
                 {isSearchFocused && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-dark-bg border border-dark-border rounded-md shadow-lg z-50 max-h-80 overflow-y-auto">
-                    {filteredTemplates.length > 0 ? (
+                    {templatesLoading ? (
+                      <div className="p-4 text-center text-gray-400">
+                        Loading templates...
+                      </div>
+                    ) : filteredTemplates.length > 0 ? (
                       <>
-                        {/* Favorites Section */}
-                        {filteredTemplates.filter(t => t.category === 'favorites').length > 0 && (
-                          <>
-                            <div className="px-3 py-2 text-sm text-gray-400 font-medium border-b border-dark-border">
-                              Favorites
-                            </div>
-                            {filteredTemplates
-                              .filter(t => t.category === 'favorites')
-                              .map(template => (
-                                <div 
-                                  key={template.id}
-                                  className="flex items-center gap-3 p-3 hover:bg-dark-accent cursor-pointer"
-                                  onClick={() => handleTemplateSelect(template)}
-                                >
-                                  {getTemplateIcon(template.id)}
-                                  <div>
-                                    <p className="text-white">{template.name}</p>
-                                    <p className="text-xs text-gray-400">{template.source}</p>
-                                  </div>
-                                </div>
-                              ))
-                            }
-                          </>
-                        )}
-                        
                         {/* Templates Section */}
-                        {filteredTemplates.filter(t => t.category === 'templates').length > 0 && (
+                        {filteredTemplates.length > 0 && (
                           <>
                             <div className="px-3 py-2 text-sm text-gray-400 font-medium border-b border-dark-border">
                               Templates
                             </div>
-                            {filteredTemplates
-                              .filter(t => t.category === 'templates')
-                              .map(template => (
-                                <div 
+                            {filteredTemplates.map(template => (
+                                                              <div 
                                   key={template.id}
                                   className="flex items-center gap-3 p-3 hover:bg-dark-accent cursor-pointer"
                                   onClick={() => handleTemplateSelect(template)}
                                 >
-                                  {getTemplateIcon(template.id)}
+                                  {renderTemplateIcon(template)}
                                   <div>
                                     <p className="text-white">{template.name}</p>
                                     <p className="text-xs text-gray-400">{template.source}</p>
                                   </div>
                                 </div>
-                              ))
+                            ))
                             }
                           </>
                         )}
                       </>
+                    ) : templatesError ? (
+                      <div className="p-4 text-center text-red-400">
+                        Error loading templates: {templatesError}
+                      </div>
                     ) : (
                       <div className="p-4 text-center text-gray-400">
                         No templates found matching "{searchQuery}"
@@ -351,13 +306,13 @@ const generateRandomName = (): string => {
               {/* Selected Template Display */}
               {selectedTemplate && !isSearchFocused && (
                 <div className="flex items-center gap-3 p-3 bg-dark-bg border border-dark-border rounded-md">
-                  {getTemplateIcon(selectedTemplate)}
+                  {renderTemplateIcon(transformedTemplates.find(t => t.id === selectedTemplate) || {})}
                   <div>
                     <p className="text-white">
-                      {templates.find(t => t.id === selectedTemplate)?.name}
+                      {transformedTemplates.find(t => t.id === selectedTemplate)?.name}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {templates.find(t => t.id === selectedTemplate)?.source}
+                      {transformedTemplates.find(t => t.id === selectedTemplate)?.source}
                     </p>
                   </div>
                 </div>

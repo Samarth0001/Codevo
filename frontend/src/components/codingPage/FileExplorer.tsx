@@ -1,11 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Folder, Search, Plus, FolderPlus } from 'lucide-react';
-import { 
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 
 interface FileItem {
@@ -72,9 +66,28 @@ export const FileExplorer = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
+  const [currentFolder, setCurrentFolder] = useState<string>('');
+  const [contextMenu, setContextMenu] = useState<{
+    show: boolean;
+    x: number;
+    y: number;
+    item: FileItem | null;
+  }>({ show: false, x: 0, y: 0, item: null });
   const {activeFile, setActiveFile} = useEditor();
 
-  const toggleFolder = (folderId: string) => {
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenu({ show: false, x: 0, y: 0, item: null });
+    };
+
+    if (contextMenu.show) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu.show]);
+
+  const toggleFolder = (folderId: string, folderPath?: string) => {
     setExpandedFolders(prev => {
       const newSet = new Set(prev);
       if (newSet.has(folderId)) {
@@ -84,6 +97,9 @@ export const FileExplorer = ({
       }
       return newSet;
     });
+    
+    // Always update current folder context when clicking on a folder
+    setCurrentFolder(folderPath || '');
   };
 
   const getIconForFile = (extension?: string) => { 
@@ -114,15 +130,27 @@ export const FileExplorer = ({
   };
 
   const handleCreateFile = (isFolder: boolean = false) => {
-    const fileName = prompt(`Enter new ${isFolder ? 'folder' : 'file'} name:`);
-    if (fileName && onCreateFile) {
-      onCreateFile(fileName, isFolder);
+    try {
+      const fileName = prompt(`Enter new ${isFolder ? 'folder' : 'file'} name:`);
+      if (fileName && onCreateFile) {
+        // Create file in current folder context
+        const fullPath = currentFolder ? `${currentFolder}/${fileName}` : fileName;
+        onCreateFile(fullPath, isFolder);
+      }
+    } catch (error) {
+      console.error('Error in handleCreateFile:', error);
     }
   };
 
   const handleDeleteFile = (filePath: string) => {
-    if (confirm('Are you sure you want to delete this file?') && onDeleteFile) {
-      onDeleteFile(filePath);
+    try {
+      if (confirm(`Are you sure you want to delete "${filePath}"?`)) {
+        if (onDeleteFile) {
+          onDeleteFile(filePath);
+        }
+      }
+    } catch (error) {
+      console.error('Error in handleDeleteFile:', error);
     }
   };
 
@@ -160,78 +188,63 @@ export const FileExplorer = ({
 
     return (
       <div key={item.id}>
-        <ContextMenuTrigger>
-          <div 
-            className={`flex items-center py-1 px-2 hover:bg-gray-700 transition-colors duration-150 cursor-pointer rounded ${isActive && item.type === 'file' ? 'bg-gray-700' : ''}`}
-            onClick={() => item.type === 'folder' ? toggleFolder(item.id) : handleFileClick(item.id, item.path)}
-            style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          >
-            {item.type === 'folder' ? (
-              <>
-                <span className="mr-1 text-gray-400">
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </span>
-                <Folder size={16} className="mr-2 text-blue-400" />
-              </>
-            ) : (
-              <span className="ml-4 mr-2">
-                {getIconForFile(item.extension)}
+        <div 
+          className={`flex items-center py-1 px-2 hover:bg-gray-700 transition-colors duration-150 cursor-pointer rounded ${isActive && item.type === 'file' ? 'bg-gray-700' : ''}`}
+          onClick={() => {
+            if (item.type === 'folder') {
+              toggleFolder(item.id, item.path);
+            } else {
+              handleFileClick(item.id, item.path);
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu({
+              show: true,
+              x: e.clientX,
+              y: e.clientY,
+              item: item
+            });
+          }}
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        >
+          {item.type === 'folder' ? (
+            <>
+              <span className="mr-1 text-gray-400">
+                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
-            )}
-            {isRenaming ? (
-              <input
-                type="text"
-                value={newFileName}
-                onChange={(e) => setNewFileName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && item.path) {
-                    handleRenameFile(item.path, newFileName);
-                  } else if (e.key === 'Escape') {
-                    setRenamingFile(null);
-                    setNewFileName('');
-                  }
-                }}
-                onBlur={() => {
-                  if (item.path) {
-                    handleRenameFile(item.path, newFileName);
-                  }
-                }}
-                className="flex-1 bg-gray-700 text-white text-sm px-1 rounded"
-                autoFocus
-              />
-            ) : (
-              <span className="text-sm">{item.name}</span>
-            )}
-          </div>
-          <ContextMenuContent className="bg-gray-800 border-gray-700 text-white">
-            <ContextMenuItem 
-              className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
-              onClick={() => handleCreateFile(false)}
-            >
-              New File
-            </ContextMenuItem>
-            <ContextMenuItem 
-              className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
-              onClick={() => handleCreateFile(true)}
-            >
-              New Folder
-            </ContextMenuItem>
-            {item.type === 'file' && (
-              <ContextMenuItem 
-                className="hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
-                onClick={() => item.path && startRename(item.path, item.name)}
-              >
-                Rename
-              </ContextMenuItem>
-            )}
-            <ContextMenuItem 
-              className="text-red-400 hover:bg-gray-700 cursor-pointer focus:bg-gray-700"
-              onClick={() => item.path && handleDeleteFile(item.path)}
-            >
-              Delete
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenuTrigger>
+              <Folder size={16} className="mr-2 text-blue-400" />
+            </>
+          ) : (
+            <span className="ml-4 mr-2">
+              {getIconForFile(item.extension)}
+            </span>
+          )}
+          {isRenaming ? (
+            <input
+              type="text"
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && item.path) {
+                  handleRenameFile(item.path, newFileName);
+                } else if (e.key === 'Escape') {
+                  setRenamingFile(null);
+                  setNewFileName('');
+                }
+              }}
+              onBlur={() => {
+                if (item.path) {
+                  handleRenameFile(item.path, newFileName);
+                }
+              }}
+              className="flex-1 bg-gray-700 text-white text-sm px-1 rounded"
+              autoFocus
+            />
+          ) : (
+            <span className="text-sm">{item.name}</span>
+          )}
+        </div>
 
         {item.type === 'folder' && isExpanded && item.children && (
           <div>
@@ -245,7 +258,12 @@ export const FileExplorer = ({
   return (
     <div className="h-full flex flex-col bg-gray-800/95">
       <div className="flex items-center justify-between p-2 border-b border-gray-700">
-        <div className="text-sm font-medium text-gray-300">Files</div>
+        <div className="flex flex-col">
+          <div className="text-sm font-medium text-gray-300">Files</div>
+          <div className="text-xs text-gray-500">
+            {currentFolder ? `Creating in: ${currentFolder}` : 'Creating in: root'}
+          </div>
+        </div>
         <div className="flex space-x-1">
           <Button 
             variant="ghost" 
@@ -253,6 +271,7 @@ export const FileExplorer = ({
             className="h-7 w-7 hover:bg-gray-700"
             onClick={() => handleCreateFile(false)}
             disabled={!isConnected}
+            title={currentFolder ? `Create file in ${currentFolder}` : "Create file in root directory"}
           >
             <Plus size={14} className="text-gray-300" />
           </Button>
@@ -262,13 +281,22 @@ export const FileExplorer = ({
             className="h-7 w-7 hover:bg-gray-700"
             onClick={() => handleCreateFile(true)}
             disabled={!isConnected}
+            title={currentFolder ? `Create folder in ${currentFolder}` : "Create folder in root directory"}
           >
             <FolderPlus size={14} className="text-gray-300" />
           </Button>
         </div>
       </div>
       
-      <div className="p-2 border-b border-gray-700">
+      <div 
+        className="p-2 border-b border-gray-700"
+        onClick={(e) => {
+          // If clicking on the search area (not on the input), reset to root
+          if (e.target === e.currentTarget) {
+            setCurrentFolder('');
+          }
+        }}
+      >
         <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
           <input 
@@ -281,11 +309,72 @@ export const FileExplorer = ({
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-1">
-        <ContextMenu>
-          {files.map(file => renderFileItem(file))}
-        </ContextMenu>
+      <div 
+        className="flex-1 overflow-y-auto p-1"
+        onClick={(e) => {
+          // If clicking on the container itself (not on a file/folder), reset to root
+          if (e.target === e.currentTarget) {
+            setCurrentFolder('');
+          }
+        }}
+      >
+        {files.map(file => renderFileItem(file))}
       </div>
+      
+      {/* Custom Context Menu */}
+      {contextMenu.show && (
+        <div 
+          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-lg text-white text-sm"
+          style={{ 
+            left: contextMenu.x, 
+            top: contextMenu.y,
+            minWidth: '200px'
+          }}
+        >
+          <div 
+            className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+            onClick={() => {
+              handleCreateFile(false);
+              setContextMenu({ show: false, x: 0, y: 0, item: null });
+            }}
+          >
+            New File {currentFolder ? `in ${currentFolder}` : 'in root'}
+          </div>
+          <div 
+            className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+            onClick={() => {
+              handleCreateFile(true);
+              setContextMenu({ show: false, x: 0, y: 0, item: null });
+            }}
+          >
+            New Folder {currentFolder ? `in ${currentFolder}` : 'in root'}
+          </div>
+          {contextMenu.item?.type === 'file' && (
+            <div 
+              className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+              onClick={() => {
+                if (contextMenu.item?.path) {
+                  startRename(contextMenu.item.path, contextMenu.item.name);
+                }
+                setContextMenu({ show: false, x: 0, y: 0, item: null });
+              }}
+            >
+              Rename
+            </div>
+          )}
+          <div 
+            className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-red-400"
+            onClick={() => {
+              if (contextMenu.item?.path) {
+                handleDeleteFile(contextMenu.item.path);
+              }
+              setContextMenu({ show: false, x: 0, y: 0, item: null });
+            }}
+          >
+            Delete
+          </div>
+        </div>
+      )}
       
       {!isConnected && (
         <div className="p-2 bg-yellow-600/20 border-t border-yellow-600/40">

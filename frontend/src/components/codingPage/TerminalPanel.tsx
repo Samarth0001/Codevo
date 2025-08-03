@@ -18,6 +18,8 @@ export const TerminalPanel = ({
   toggleTerminal,
   socket
 }: TerminalPanelProps) => {
+
+
   return (
     <div className="h-full w-full flex flex-col bg-gray-900">
       <Tabs 
@@ -30,9 +32,11 @@ export const TerminalPanel = ({
             <TabsTrigger value="shell" className="h-6 text-xs data-[state=active]:bg-gray-600">Shell</TabsTrigger>
             <TabsTrigger value="console" className="h-6 text-xs data-[state=active]:bg-gray-600">Console</TabsTrigger>
           </TabsList>
-          <Button variant="ghost" size="sm" onClick={toggleTerminal} className="h-6 w-6 p-0">
-            <Minimize size={14} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={toggleTerminal} className="h-6 w-6 p-0">
+              <Minimize size={14} />
+            </Button>
+          </div>
         </div>
         <TabsContent value="shell" className="p-0 flex-1 overflow-hidden h-full">
           <Shell socket={socket} />

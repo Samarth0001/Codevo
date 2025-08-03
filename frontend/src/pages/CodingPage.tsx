@@ -4,7 +4,8 @@ import { Preview } from "@/components/codingPage/Preview";
 import EditorHeader from "@/components/codingPage/EditorHead";
 import { ActionSidebar } from "@/components/codingPage/ActionSidebar";
 import { CodeEditorPanel } from "@/components/codingPage/CodeEditorPanel";
-import { TerminalPanel } from "@/components/codingPage/TerminalPanel";
+import { Shell } from "@/components/codingPage/Shell";
+import { Console } from "@/components/codingPage/Console";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, X } from "lucide-react";
@@ -14,10 +15,13 @@ import {
   PanelResizeHandle,
 } from "react-resizable-panels";
 import { useEditor } from "@/context/EditorContext";
-import { useParams} from "react-router-dom";
-import { createProject } from "@/services/operations/ProjectAPI";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { createProject, getProjectDetails, joinProject, checkProjectStatus } from "@/services/operations/ProjectAPI";
 import Spinner from "@/components/auth/Spinner";
 import { io, Socket } from "socket.io-client";
+import { CollaborationProvider } from "@/context/CollaborationContext";
+import { useContext } from "react";
+import { AuthContext } from "@/context/AuthContext";
 
 type TabType = 'preview' | 'shell' | 'console';
 
@@ -33,27 +37,153 @@ interface FileItem {
 const CodingPage = () => {
 
   const {loading,setLoading} = useEditor();
-  const {projectId} = useParams();
+  const {projectId} = useParams();  
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, refreshUser } = useContext(AuthContext);
+  const {
+    projectName,
+    description,
+    templateId,
+    userId,
+    visibility,
+    tags
+  } = location.state || {};
+
+  console.log('CodingPage - location.state:', location.state);
+  console.log('CodingPage - extracted values:', {
+    projectName,
+    description,
+    templateId,
+    userId,
+    visibility,
+    tags
+  });
 
   async function createProjectFn(){
     try{
       setLoading(true);
-      const projectDetails = await createProject({uniqueId:projectId},setLoading);
-      console.log("Project created successfully");
+      const projectData = {
+        uniqueId: projectId,
+        projectName,
+        description,
+        templateId,
+        userId,
+        visibility,
+        tags
+      };
+      console.log('CodingPage - calling createProject with:', projectData);
+      
+      const projectDetails = await createProject(projectData, setLoading);
+      console.log("Project created successfully", projectDetails);
+      
+      // Refresh user data to get updated projects list
+      await refreshUser();
+      
       setLoading(false);
     }
     catch(e){
-      console.log(e);
+      console.log("Error creating project:", e);
+      setLoading(false);
+    }
+  }
+
+  async function joinExistingProject() {
+    try {
+      setLoading(true);
+      console.log('CodingPage - fetching project details for:', projectId);
+      
+      // Fetch project details from backend
+      const projectDetails = await getProjectDetails(projectId);
+      console.log('CodingPage - project details fetched:', projectDetails);
+      
+      if (!projectDetails.success) {
+        // Project doesn't exist in database, redirect to dashboard
+        alert('Project does not exist. It may have been deleted.');
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Check if project is active using Redis (much faster than WebSocket test)
+      const projectStatus = await checkProjectStatus(projectId);
+      console.log('CodingPage - project status:', projectStatus);
+      
+      if (projectStatus.isActive) {
+        // Project is active, just join
+        console.log('CodingPage - Project is active, joining...');
+        const joinResult = await joinProject(projectId, user?._id);
+        console.log('CodingPage - joined project:', joinResult);
+      } else {
+        // Project exists but is not active, create Kubernetes resources
+        console.log('CodingPage - Project exists but not active, creating resources...');
+        
+        try {
+          // Create Kubernetes resources for existing project
+          const createResult = await createProject({
+            uniqueId: projectId,
+            projectName: projectDetails.project.projectName,
+            description: projectDetails.project.description || '',
+            templateId: projectDetails.project.templateId,
+            userId: user?._id,
+            visibility: projectDetails.project.visibility || 'private',
+            tags: projectDetails.project.tags || []
+          }, setLoading);
+          
+          console.log('CodingPage - created resources for existing project:', createResult);
+          
+          // Refresh user data to get updated projects
+          await refreshUser();
+        } catch (createError) {
+          console.error('Error creating resources for existing project:', createError);
+          alert('Failed to activate project. Please try again.');
+          navigate('/dashboard');
+          return;
+        }
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error joining project:', error);
+      alert('Failed to join project. Please try again.');
+      navigate('/dashboard');
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    setLoading(true);
-    if(projectId){
-      createProjectFn();
+    console.log('CodingPage - useEffect triggered with:', { projectId, user: user?._id, projectName, templateId, userId });
+    
+    if (!projectId) {
+      alert('No project ID provided.');
+      navigate('/dashboard');
+      return;
     }
-    setLoading(false);
-  },[]);
+
+    console.log('CodingPage - user:', user);
+    // Wait for user data to be loaded
+    if (!user) {
+      console.log('CodingPage - User data not loaded yet, waiting...');
+      return;
+    }
+
+    if (!user._id) {
+      alert('User not authenticated.');
+      navigate('/login');
+      return;
+    }
+
+    // If we have location.state, it's a new project creation
+    if (projectName && templateId && userId) {
+      console.log('CodingPage - Creating new project');
+      setLoading(true);
+      createProjectFn();
+    } else {
+      // No location.state means joining existing project
+      console.log('CodingPage - Joining existing project');
+      joinExistingProject();
+    }
+    // Remove this setLoading(false) as it's handled in the individual functions
+  },[projectId, user]);
 
   if(loading){
     return (
@@ -73,12 +203,14 @@ const CodingPagePostPodCreation = () => {
   const [selectedTab, setSelectedTab] = useState<TabType | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState("vs-dark");
-  const [isRightLayout, setIsRightLayout] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [fileStructure, setFileStructure] = useState<FileItem[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const { projectId } = useParams();
+  const location = useLocation();
   const { activeFile, setActiveFile, openFiles, setOpenFiles } = useEditor();
+  const { user } = useContext(AuthContext);
+
 
   // WebSocket connection to runner container
   useEffect(() => {
@@ -93,6 +225,9 @@ const CodingPagePostPodCreation = () => {
     // const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`);
     const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`, {
       path: "/user/socket.io",
+      timeout: 10000, // 10 second timeout
+      reconnection: true,
+      reconnectionAttempts: 5,
     });
 
     runnerSocket.on('connect', () => {
@@ -101,7 +236,16 @@ const CodingPagePostPodCreation = () => {
       
       // Join project room first
       console.log(`[CodingPage] Joining project room: ${projectId}`);
-      runnerSocket.emit('join:project', { projectId });
+      const userInfo = {
+        userId: user?._id || runnerSocket.id,
+        username: user?.name || 'Anonymous'
+      };
+      console.log(`[CodingPage] User info:`, userInfo);
+      
+      runnerSocket.emit('join:project', { 
+        projectId,
+        userInfo
+      });
       
       // Initialize project - this will create default files and send structure + content
       console.log(`[CodingPage] Emitting project:initialize for project: ${projectId}`);
@@ -187,41 +331,68 @@ const CodingPagePostPodCreation = () => {
     });
 
     // Handle file creation
-    runnerSocket.on('files:created', (file: FileItem) => {
+    runnerSocket.on('file:created', (file: FileItem & { createdBy: string; timestamp: number }) => {
       console.log('File created:', file);
-      setFileStructure(prev => [...prev, file]);
+      setFileStructure(prev => addFileToStructure(prev, file));
       
       if (file.type === 'file') {
-        const newOpenFiles = [...openFiles, file.name];
+        const newOpenFiles = [...openFiles, file.path || file.name];
         setOpenFiles(newOpenFiles);
       }
     });
 
     // Handle file deletion
-    runnerSocket.on('files:deleted', (filePath: string) => {
-      console.log('File deleted:', filePath);
-      setFileStructure(prev => removeFileFromStructure(prev, filePath));
-      const newOpenFiles = openFiles.filter(name => name !== filePath);
+    runnerSocket.on('file:deleted', (data: { path: string; deletedBy: string; timestamp: number }) => {
+      console.log('File deleted:', data.path);
+      
+      setFileStructure(prev => {
+        console.log('Removing file from structure:', data.path);
+        const newStructure = removeFileFromStructure(prev, data.path);
+        console.log('New structure after deletion:', newStructure);
+        return newStructure;
+      });
+      
+      // Update open files
+      const newOpenFiles = openFiles.filter(name => name !== data.path);
       setOpenFiles(newOpenFiles);
       
       // If the deleted file was active, switch to another file
-      if (activeFile === filePath) {
-        if (newOpenFiles.length > 0) {
-          setActiveFile(newOpenFiles[0]);
+      if (activeFile === data.path) {
+        console.log(`[CodingPage] Active file "${data.path}" was deleted, switching to another file`);
+        
+        // Find another file to switch to
+        const remainingFiles = newOpenFiles.filter(name => name !== data.path);
+        console.log(`[CodingPage] Remaining files after deletion:`, remainingFiles);
+        
+        if (remainingFiles.length > 0) {
+          // Prefer main.js, then index.js, then index.html, then any .js file, then first file
+          const preferredFile = remainingFiles.find(name => name === "main.js") || 
+                               remainingFiles.find(name => name === "index.js") ||  
+                               remainingFiles.find(name => name === "index.html") || 
+                               remainingFiles.find(name => name.endsWith(".js")) || 
+                               remainingFiles[0];
+          console.log(`[CodingPage] Switching to preferred file after deletion: ${preferredFile}`);
+          setActiveFile(preferredFile);
+        } else {
+          // No files left, clear active file
+          console.log('[CodingPage] No files remaining after deletion, clearing active file');
+          setActiveFile('');
         }
+      } else {
+        console.log(`[CodingPage] Deleted file "${data.path}" was not active, no need to switch`);
       }
     });
 
     // Handle file rename
-    runnerSocket.on('files:renamed', ({ oldPath, newPath }: { oldPath: string; newPath: string }) => {
-      console.log('File renamed:', oldPath, '->', newPath);
-      setFileStructure(prev => renameFileInStructure(prev, oldPath, newPath));
-      const newOpenFiles = openFiles.map(name => name === oldPath ? newPath : name);
+    runnerSocket.on('file:renamed', (data: { oldPath: string; newPath: string; renamedBy: string; timestamp: number }) => {
+      console.log('File renamed:', data.oldPath, '->', data.newPath);
+      setFileStructure(prev => renameFileInStructure(prev, data.oldPath, data.newPath));
+      const newOpenFiles = openFiles.map(name => name === data.oldPath ? data.newPath : name);
       setOpenFiles(newOpenFiles);
       
       // Update active file if it was renamed
-      if (activeFile === oldPath) {
-        setActiveFile(newPath);
+      if (activeFile === data.oldPath) {
+        setActiveFile(data.newPath);
       }
     });
 
@@ -244,8 +415,15 @@ const CodingPagePostPodCreation = () => {
 
   // Helper function to remove file from structure
   const removeFileFromStructure = (structure: FileItem[], path: string): FileItem[] => {
+    console.log('Removing file from structure:', path);
+    console.log('Current structure:', structure);
+    
     return structure.filter(item => {
-      if (item.path === path) return false;
+      console.log('Checking item:', item.path, 'against path:', path);
+      if (item.path === path) {
+        console.log('Found item to remove:', item.path);
+        return false;
+      }
       if (item.children) {
         item.children = removeFileFromStructure(item.children, path);
       }
@@ -266,6 +444,36 @@ const CodingPagePostPodCreation = () => {
     });
   };
 
+  // Helper function to add file to structure
+  const addFileToStructure = (structure: FileItem[], newFile: FileItem): FileItem[] => {
+    const pathParts = newFile.path?.split('/') || [];
+    
+    if (pathParts.length === 1) {
+      // File is in root
+      return [...structure, newFile];
+    }
+    
+    // File is in a subdirectory
+    const parentPath = pathParts.slice(0, -1).join('/');
+    const fileName = pathParts[pathParts.length - 1];
+    
+    return structure.map(item => {
+      if (item.path === parentPath && item.type === 'folder') {
+        return {
+          ...item,
+          children: [...(item.children || []), { ...newFile, name: fileName }]
+        };
+      }
+      if (item.children) {
+        return {
+          ...item,
+          children: addFileToStructure(item.children, newFile)
+        };
+      }
+      return item;
+    });
+  };
+
   // File operations
   const createFile = (path: string, isFolder: boolean = false) => {
     if (socket && isConnected) {
@@ -274,8 +482,11 @@ const CodingPagePostPodCreation = () => {
   };
 
   const deleteFile = (path: string) => {
+    console.log('Attempting to delete file:', path);
     if (socket && isConnected) {
       socket.emit('files:delete', { path });
+    } else {
+      console.error('Cannot delete file: socket not connected');
     }
   };
 
@@ -312,20 +523,23 @@ const CodingPagePostPodCreation = () => {
     setIsFullscreen(!isFullscreen);
   };
 
-  const toggleLayout = () => {
-    setIsRightLayout(!isRightLayout);
-  };
+
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
+    <CollaborationProvider 
+      socket={socket} 
+      userId={user?._id || socket?.id || 'anonymous'} 
+      username={user?.name || 'Anonymous'}
+    >
+      <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
       {/* Header */}
       <EditorHeader 
         isFullscreen={isFullscreen} 
         toggleFullscreen={toggleFullscreen}
         toggleTerminal={() => addTab('shell')}
         togglePreview={() => addTab('preview')}
-        toggleLayout={toggleLayout}
-        isRightLayout={isRightLayout}
+        projectId={projectId}
+        projectName={location.state?.projectName}
       />
 
       {/* Connection Status */}
@@ -349,196 +563,96 @@ const CodingPagePostPodCreation = () => {
 
         {/* Main layout */}
         <div className="flex-1 h-full relative">
-          {isRightLayout ? (
-            <PanelGroup direction="horizontal">
-              {showFileExplorer && (
-                <>
-                  <Panel defaultSize={10} minSize={10} maxSize={30}>
-                    <div className="h-full relative">
-                      <FileExplorer 
-                        files={fileStructure}
-                        onCreateFile={createFile}
-                        onDeleteFile={deleteFile}
-                        onRenameFile={renameFile}
-                        onGetFileContent={getFileContent}
-                        isConnected={isConnected}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-700 border border-gray-700 rounded-full h-12 w-8"
-                        onClick={() => setShowFileExplorer(false)}
-                      >
-                        <ChevronLeft size={14} color="black"/>
-                      </Button>
-                    </div>
-                  </Panel>
-                  <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
-                </>
-              )}
-              <Panel defaultSize={showFileExplorer ? 90 : 100}>
-                <PanelGroup direction="horizontal">
-                  <Panel defaultSize={70} minSize={30}>
-                    <CodeEditorPanel 
-                      currentTheme={currentTheme}
-                      setCurrentTheme={setCurrentTheme}
-                      socket={socket}
+          <PanelGroup direction="horizontal">
+            {showFileExplorer && (
+              <>
+                <Panel defaultSize={10} minSize={10} maxSize={30}>
+                  <div className="h-full relative">
+                    <FileExplorer 
+                      files={fileStructure}
+                      onCreateFile={createFile}
+                      onDeleteFile={deleteFile}
+                      onRenameFile={renameFile}
+                      onGetFileContent={getFileContent}
+                      isConnected={isConnected}
                     />
-                  </Panel>
-                  {activeTabs.length > 0 && (
-                    <>
-                      <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
-                      <Panel defaultSize={30} minSize={20}>
-                        <div className="h-full flex flex-col border-l border-gray-700">
-                          <Tabs value={selectedTab || undefined} onValueChange={(val) => setSelectedTab(val as TabType)} className="flex flex-col h-full">
-                            <TabsList className="bg-gray-800 border-b border-gray-700 flex ">
-                              {activeTabs.map((tab) => (
-                                <div key={tab} className="flex items-center ">
-                                  <TabsTrigger 
-                                    value={tab} 
-                                    className="data-[state=active]:bg-gray-700 "
-                                  >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                  </TabsTrigger>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 p-0 hover:bg-gray-700"
-                                    onClick={() => removeTab(tab)}
-                                  >
-                                    <X size={14} />
-                                  </Button>
-                                </div>
-                              ))}
-                            </TabsList>
-                            <div className="flex-1 min-h-0">
-                              {activeTabs.map((tab) => (
-                                <TabsContent key={tab} value={tab} className="h-full m-0">
-                                  {tab === 'preview' && <Preview />}
-                                  {tab === 'shell' && (
-                                    <TerminalPanel 
-                                      terminalTab="shell"
-                                      setTerminalTab={() => {}}
-                                      toggleTerminal={() => removeTab('shell')}
-                                      socket={socket}
-                                    />
-                                  )}
-                                  {tab === 'console' && (
-                                    <TerminalPanel 
-                                      terminalTab="console"
-                                      setTerminalTab={() => {}}
-                                      toggleTerminal={() => removeTab('console')}
-                                      socket={socket}
-                                    />
-                                  )}
-                                </TabsContent>
-                              ))}
-                            </div>
-                          </Tabs>
-                        </div>
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </Panel>
-            </PanelGroup>
-          ) : (
-            <PanelGroup direction="horizontal">
-              {showFileExplorer && (
-                <>
-                  <Panel defaultSize={10} minSize={10} maxSize={30}>
-                    <div className="h-full relative">
-                      <FileExplorer 
-                        files={fileStructure}
-                        onCreateFile={createFile}
-                        onDeleteFile={deleteFile}
-                        onRenameFile={renameFile}
-                        onGetFileContent={getFileContent}
-                        isConnected={isConnected}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-700 border border-gray-700 rounded-full h-12 w-8"
-                        onClick={() => setShowFileExplorer(false)}
-                      >
-                        <ChevronLeft size={14} color="black"/>
-                      </Button>
-                    </div>
-                  </Panel>
-                  <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
-                </>
-              )}
-              <Panel defaultSize={showFileExplorer ? 90 : 100}>
-                <PanelGroup direction="vertical">
-                  <Panel defaultSize={70} minSize={30}>
-                    <CodeEditorPanel 
-                      currentTheme={currentTheme}
-                      setCurrentTheme={setCurrentTheme}
-                      socket={socket}
-                    />
-                  </Panel>
-                  {activeTabs.length > 0 && (
-                    <>
-                      <PanelResizeHandle className="h-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
-                      <Panel defaultSize={30} minSize={20}>
-                        <div className="h-full flex flex-col border-t border-gray-700">
-                          <Tabs value={selectedTab || undefined} onValueChange={(val) => setSelectedTab(val as TabType)} className="flex flex-col h-full">
-                            <TabsList className="bg-gray-800 border-b border-gray-700 shrink-0">
-                              {activeTabs.map((tab) => (
-                                <div key={tab} className="flex items-center">
-                                  <TabsTrigger 
-                                    value={tab} 
-                                    className="data-[state=active]:bg-gray-700"
-                                  >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                  </TabsTrigger>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 p-0 hover:bg-gray-700"
-                                    onClick={() => removeTab(tab)}
-                                  >
-                                    <X size={14} />
-                                  </Button>
-                                </div>
-                              ))}
-                            </TabsList>
-                            <div className="flex-1 min-h-0">
-                              {activeTabs.map((tab) => (
-                                <TabsContent key={tab} value={tab} className="h-full m-0">
-                                  {tab === 'preview' && <Preview />}
-                                  {tab === 'shell' && (
-                                    <TerminalPanel 
-                                      terminalTab="shell"
-                                      setTerminalTab={() => {}}
-                                      toggleTerminal={() => removeTab('shell')}
-                                      socket={socket}
-                                    />
-                                  )}
-                                  {tab === 'console' && (
-                                    <TerminalPanel 
-                                      terminalTab="console"
-                                      setTerminalTab={() => {}}
-                                      toggleTerminal={() => removeTab('console')}
-                                      socket={socket}
-                                    />
-                                  )}
-                                </TabsContent>
-                              ))}
-                            </div>
-                          </Tabs>
-                        </div>
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </Panel>
-            </PanelGroup>
-          )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-700 border border-gray-700 rounded-full h-12 w-8"
+                      onClick={() => setShowFileExplorer(false)}
+                    >
+                      <ChevronLeft size={14} color="black"/>
+                    </Button>
+                  </div>
+                </Panel>
+                <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
+              </>
+            )}
+            <Panel defaultSize={showFileExplorer ? 80 : 100}>
+              <PanelGroup direction="horizontal">
+                <Panel defaultSize={70} minSize={30}>
+                  <CodeEditorPanel 
+                    currentTheme={currentTheme}
+                    setCurrentTheme={setCurrentTheme}
+                    socket={socket}
+                  />
+                </Panel>
+                {activeTabs.length > 0 && (
+                  <>
+                    <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
+                    <Panel defaultSize={60} minSize={20}>
+                      <div className="h-full flex flex-col border-l border-gray-700">
+                        <Tabs value={selectedTab || undefined} onValueChange={(val) => setSelectedTab(val as TabType)} className="flex flex-col h-full">
+                          <TabsList className="bg-gray-800 border-b border-gray-700 flex ">
+                            {activeTabs.map((tab) => (
+                              <div key={tab} className="flex items-center ">
+                                <TabsTrigger 
+                                  value={tab} 
+                                  className="data-[state=active]:bg-gray-700 "
+                                >
+                                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                </TabsTrigger>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 p-0 hover:bg-gray-700"
+                                  onClick={() => removeTab(tab)}
+                                >
+                                  <X size={14} />
+                                </Button>
+                              </div>
+                            ))}
+                          </TabsList>
+                          <div className="flex-1 min-h-0">
+                            {activeTabs.map((tab) => (
+                              <TabsContent key={tab} value={tab} className="h-full m-0">
+                                {tab === 'preview' && <Preview />}
+                                {tab === 'shell' && (
+                                  <div className="h-full w-full overflow-auto">
+                                    <Shell socket={socket} onClose={() => removeTab('shell')} />
+                                  </div>
+                                )}
+                                {tab === 'console' && (
+                                  <div className="h-full w-full overflow-hidden">
+                                    <Console />
+                                  </div>
+                                )}
+                              </TabsContent>
+                            ))}
+                          </div>
+                        </Tabs>
+                      </div>
+                    </Panel>
+                  </>
+                )}
+              </PanelGroup>
+            </Panel>
+          </PanelGroup>
         </div>
       </div>
     </div>
+    </CollaborationProvider>
   );
 };
 
