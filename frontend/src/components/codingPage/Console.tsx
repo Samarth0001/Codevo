@@ -1,10 +1,22 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-export const Console = () => {
+interface ExecutionResult {
+  success: boolean;
+  output: string;
+  error: string;
+  executionTime: number;
+}
+
+interface ConsoleProps {
+  executionResult?: ExecutionResult | null;
+  isExecuting?: boolean;
+}
+
+export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
   const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn'; message: string}[]>([
     { type: 'log', message: '> Console ready' },
-    { type: 'log', message: '> Try running your code to see outputs here' }
+    { type: 'log', message: '> Click the Run button to execute your code' }
   ]);
   
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -16,22 +28,44 @@ export const Console = () => {
     }
   }, [logs]);
 
-  // Simulate some console logs
+  // Handle execution results
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (isExecuting) {
       setLogs(prev => [
         ...prev,
-        { type: 'log', message: '> Hello, world!' },
-        { type: 'log', message: '> Loading environment variables...' },
-        { type: 'log', message: '> Environment loaded successfully' },
-        { type: 'warn', message: '> Warning: This is a simulated warning' },
-        { type: 'error', message: '> Error: This is a simulated error' },
-        { type: 'log', message: '> Initialization complete' }
+        { type: 'log', message: '> 🚀 Executing code...' }
       ]);
-    }, 1500);
+    }
+  }, [isExecuting]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  // Handle execution results
+  useEffect(() => {
+    if (executionResult) {
+      const newLogs: {type: 'log' | 'error' | 'warn'; message: string}[] = [];
+      
+      // Add execution result header
+      if (executionResult.success) {
+        newLogs.push({ type: 'log', message: `> ✅ Code executed successfully in ${executionResult.executionTime}ms` });
+      } else {
+        newLogs.push({ type: 'error', message: `> ❌ Code execution failed in ${executionResult.executionTime}ms` });
+      }
+
+      // Add output if any
+      if (executionResult.output) {
+        newLogs.push({ type: 'log', message: `> Output:\n${executionResult.output}` });
+      }
+
+      // Add error if any
+      if (executionResult.error) {
+        newLogs.push({ type: 'error', message: `> Error:\n${executionResult.error}` });
+      }
+
+      // Add separator
+      newLogs.push({ type: 'log', message: '> ' + '─'.repeat(50) });
+
+      setLogs(prev => [...prev, ...newLogs]);
+    }
+  }, [executionResult]);
 
   const getLogStyle = (type: 'log' | 'error' | 'warn') => {
     switch (type) {

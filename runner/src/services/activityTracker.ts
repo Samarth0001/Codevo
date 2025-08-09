@@ -27,7 +27,7 @@ export async function userJoinedProject(projectId: string, userId: string) {
       .expire(usersKey, PROJECT_TTL)
       .exec();
     
-    console.log(`[ActivityTracker] User ${userId} joined project ${projectId}`);
+    // console.log(`[ActivityTracker] User ${userId} joined project ${projectId}`);
   } catch (error) {
     console.error(`[ActivityTracker] Error adding user to project:`, error);
   }
@@ -43,7 +43,7 @@ export async function userActivity(projectId: string) {
       .expire(usersKey, PROJECT_TTL)
       .exec();
     
-    console.log(`[ActivityTracker] Activity detected for project ${projectId}`);
+    // console.log(`[ActivityTracker] Activity detected for project ${projectId}`);
   } catch (error) {
     console.error(`[ActivityTracker] Error updating activity:`, error);
   }
@@ -59,9 +59,9 @@ export async function userLeftProject(projectId: string, userId: string) {
     if (userCount === 0) {
       await redis.expire(usersKey, 1);
       await redis.expire(`active_project:${projectId}`, 1);
-      console.log(`[ActivityTracker] No users left in project ${projectId}, marking for cleanup`);
+      // console.log(`[ActivityTracker] No users left in project ${projectId}, marking for cleanup`);
     } else {
-      console.log(`[ActivityTracker] User ${userId} left project ${projectId}, ${userCount} users remaining`);
+      // console.log(`[ActivityTracker] User ${userId} left project ${projectId}, ${userCount} users remaining`);
     }
   } catch (error) {
     console.error(`[ActivityTracker] Error removing user from project:`, error);

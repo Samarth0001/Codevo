@@ -14,6 +14,7 @@ interface CodeEditorPanelProps {
   currentTheme: string;
   setCurrentTheme: (theme: string) => void;
   socket?: Socket | null;
+  onFileContentChange?: (path: string, content: string) => void;
 }
 
 // File content storage
@@ -21,7 +22,7 @@ interface FileContent {
   [key: string]: string;
 }
 
-export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeEditorPanelProps) => {
+export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileContentChange }: CodeEditorPanelProps) => {
   const editorRef = useRef<any>(null);
   const [fileContents, setFileContents] = useState<FileContent>({});
   const [isEditorReady, setIsEditorReady] = useState(false);
@@ -228,12 +229,17 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket }: CodeE
       [activeFile]: content
     }));
 
+    // Notify parent component for preview updates
+    if (onFileContentChange) {
+      onFileContentChange(activeFile, content);
+    }
+
     // Send to backend
     socket.emit('files:saveContent', {
       path: activeFile,
       content: content
     });
-  }, [activeFile, socket, fileContents]);
+  }, [activeFile, socket, fileContents, onFileContentChange]);
 
   // Handle active file changes and ensure editor content is in sync
   useEffect(() => {

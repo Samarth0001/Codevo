@@ -108,7 +108,7 @@ export class CollaborationManager {
 
     socket.emit('users:list', currentUsers);
 
-    console.log(`[CollaborationManager] User ${userInfo.username} joined project ${projectId}. Total users: ${room.users.size}`);
+    // console.log(`[CollaborationManager] User ${userInfo.username} joined project ${projectId}. Total users: ${room.users.size}`);
   }
 
   // Leave room
@@ -195,18 +195,18 @@ export class CollaborationManager {
       timestamp: change.timestamp
     };
     
-    console.log(`[CollaborationManager] Broadcasting file change for ${path}:`, {
-      contentLength: String(content).length,
-      contentType: typeof String(content),
-      contentPreview: String(content).substring(0, 50)
-    });
+    // console.log(`[CollaborationManager] Broadcasting file change for ${path}:`, {
+    //   contentLength: String(content).length,
+    //   contentType: typeof String(content),
+    //   contentPreview: String(content).substring(0, 50)
+    // });
     
     socket.to(projectId).emit('file:changed', broadcastData);
 
           // Save to file system immediately for runner access
       try {
         await this.fileSystemManager.saveFileContent(path, content);
-        console.log(`[CollaborationManager] Saved ${path} to file system`);
+        // console.log(`[CollaborationManager] Saved ${path} to file system`);
         
         // Update project's last modified timestamp in memory
         if (userId) {
@@ -530,32 +530,32 @@ export class CollaborationManager {
   }
 
   // Debounce persistence to worker
-  private debouncePersistence(room: ProjectRoom, path: string, content: string) {
+  public debouncePersistence(room: ProjectRoom, path: string, content: string) {
     const existingTimer = room.debounceTimers.get(path);
     if (existingTimer) {
       clearTimeout(existingTimer);
-      console.log(`[CollaborationManager] Reset debounce timer for ${path}`);
+      // console.log(`[CollaborationManager] Reset debounce timer for ${path}`);
     }
 
     const timer = setTimeout(async () => {
       try {
-        console.log(`[CollaborationManager] Debounce timer expired, persisting ${path} to worker`);
+        // console.log(`[CollaborationManager] Debounce timer expired, persisting ${path} to worker`);
         await this.persistToWorker(room.projectId, path, content);
         room.lastSync.set(path, Date.now());
-        console.log(`[CollaborationManager] Successfully persisted ${path} to worker after debounce`);
+        // console.log(`[CollaborationManager] Successfully persisted ${path} to worker after debounce`);
       } catch (error) {
-        console.error(`[CollaborationManager] Error persisting ${path}:`, error);
+        // console.error(`[CollaborationManager] Error persisting ${path}:`, error);
       }
-    }, 5000); // 5 second debounce
+    }, 1000); // 1 second debounce
 
     room.debounceTimers.set(path, timer);
-    console.log(`[CollaborationManager] Set debounce timer for ${path} (5 seconds)`);
+    // console.log(`[CollaborationManager] Set debounce timer for ${path} (5 seconds)`);
   }
 
   // Persist file to worker
   private async persistToWorker(projectId: string, path: string, content: string) {
     try {
-      console.log(`[CollaborationManager] Persisting ${path} to worker at ${this.workerUrl}/persist`);
+      // console.log(`[CollaborationManager] Persisting ${path} to worker at ${this.workerUrl}/persist`);
       const response = await axios.post(`${this.workerUrl}/persist`, {
         projectId,
         path,
@@ -570,9 +570,9 @@ export class CollaborationManager {
       if (response.status !== 200) {
         throw new Error(`Worker responded with ${response.status}`);
       }
-      console.log(`[CollaborationManager] Successfully persisted ${path} to worker`);
+      // console.log(`[CollaborationManager] Successfully persisted ${path} to worker`);
     } catch (error) {
-      console.error(`[CollaborationManager] Error persisting to worker:`, error);
+      // console.error(`[CollaborationManager] Error persisting to worker:`, error);
       throw error;
     }
   }
@@ -682,5 +682,23 @@ export class CollaborationManager {
     }
   }
 
+  // Handle file changes from workspace (terminal operations)
+  public async handleWorkspaceFileChange(projectId: string, filePath: string, content: string) {
+    const room = this.getOrCreateRoom(projectId);
+    
+    console.log(`[CollaborationManager] Handling workspace file change for ${filePath} in project ${projectId}`);
+    
+    // Update room state
+    room.fileContents.set(filePath, content);
+    const currentVersion = (room.fileVersions.get(filePath) || 0) + 1;
+    room.fileVersions.set(filePath, currentVersion);
+    
+    console.log(`[CollaborationManager] ✅ Updated ${filePath} in collaboration manager (version ${currentVersion})`);
+    
+    // Persist to worker with debouncing
+    this.debouncePersistence(room, filePath, content);
+    
+    return { success: true, version: currentVersion };
+  }
 
 } 

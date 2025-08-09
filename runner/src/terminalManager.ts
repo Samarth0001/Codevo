@@ -1,4 +1,5 @@
 import * as pty from 'node-pty';
+import { userActivity } from './services/activityTracker';
 
 const SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
 
@@ -96,6 +97,14 @@ export class TerminalManager {
         // Update last activity
         if (this.sessions[id]) {
           this.sessions[id].lastActivity = Date.now();
+          
+          // Track activity in Redis when terminal data is received (user is actively using terminal)
+          if (this.sessions[id].projectId) {
+            console.log(`[TerminalManager] Tracking terminal data activity for project ${this.sessions[id].projectId}`);
+            userActivity(this.sessions[id].projectId).catch(error => {
+              console.error(`[TerminalManager] Error tracking terminal data activity:`, error);
+            });
+          }
         }
       });
 
@@ -178,8 +187,6 @@ Available commands:
 • \x1b[1;36mgit\x1b[0m - Version control
 • \x1b[1;36mclear\x1b[0m - Clear terminal
 • \x1b[1;36mhelp\x1b[0m - Show this help
-• \x1b[1;36msync\x1b[0m - Sync files from workspace to editor
-• \x1b[1;36mfiles\x1b[0m - Show files in editor
 
 \x1b[1;33mHappy coding! 🚀\x1b[0m
 
@@ -204,6 +211,12 @@ root@codevo:/workspace# `;
   }
 
   write(terminalId: string, data: string) {
+    // Validate input type
+    if (typeof data !== 'string') {
+      console.warn(`[TerminalManager] Invalid data type for terminal ${terminalId}: ${typeof data}`);
+      return;
+    }
+    
     const session = this.sessions[terminalId];
     if (session && session.process) {
       try {
@@ -212,6 +225,14 @@ root@codevo:/workspace# `;
         console.log(`[TerminalManager] Writing to terminal ${terminalId}:`, JSON.stringify(sanitizedData));
         session.process.write(sanitizedData);
         session.lastActivity = Date.now();
+        
+        // Track activity in Redis if we have project info
+        if (session.projectId) {
+          // console.log(`[TerminalManager] Tracking terminal activity for project ${session.projectId}`);
+          userActivity(session.projectId).catch(error => {
+            console.error(`[TerminalManager] Error tracking terminal activity:`, error);
+          });
+        }
       } catch (error) {
         console.error(`[TerminalManager] Error writing to terminal ${terminalId}:`, error);
       }
@@ -222,6 +243,12 @@ root@codevo:/workspace# `;
 
   // Sanitize terminal input to prevent dangerous commands
   private sanitizeTerminalInput(input: string): string {
+    // Ensure input is a string
+    if (typeof input !== 'string') {
+      console.warn(`[TerminalManager] Invalid input type: ${typeof input}, value:`, input);
+      return '';
+    }
+    
     // Block dangerous commands that could access system files
     const dangerousCommands = [
       'rm -rf /',
@@ -331,6 +358,13 @@ root@codevo:/workspace# `;
 
   getUserSession(userId: string, projectId: string): string | null {
     return this.userSessions[userId]?.[projectId] || null;
+  }
+
+  setUserSession(userId: string, projectId: string, sessionId: string) {
+    if (!this.userSessions[userId]) {
+      this.userSessions[userId] = {};
+    }
+    this.userSessions[userId][projectId] = sessionId;
   }
 
   getAllUserSessions(userId: string): { [projectId: string]: string } {

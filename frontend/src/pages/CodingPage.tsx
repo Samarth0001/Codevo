@@ -205,6 +205,7 @@ const CodingPagePostPodCreation = () => {
   const [currentTheme, setCurrentTheme] = useState("vs-dark");
   const [socket, setSocket] = useState<Socket | null>(null);
   const [fileStructure, setFileStructure] = useState<FileItem[]>([]);
+  const [fileContents, setFileContents] = useState<Map<string, string>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
   const { projectId } = useParams();
   const location = useLocation();
@@ -266,6 +267,18 @@ const CodingPagePostPodCreation = () => {
       console.log('Project initialized:', { structure, filesWithContent, initializedProjectId });
       setFileStructure(structure);
       
+      // Populate file contents
+      if (filesWithContent && filesWithContent.length > 0) {
+        const newFileContents = new Map<string, string>();
+        filesWithContent.forEach((file: any) => {
+          if (file.path && file.content) {
+            newFileContents.set(file.path, file.content);
+          }
+        });
+        setFileContents(newFileContents);
+        console.log(`[CodingPage] Loaded ${newFileContents.size} files with content`);
+      }
+      
       // Set open files from structure
       const fileNames = structure
         .filter(item => item.type === 'file')
@@ -321,13 +334,13 @@ const CodingPagePostPodCreation = () => {
     // Handle file content updates
     runnerSocket.on('files:content', ({ path, content }) => {
       console.log('Received file content for:', path);
-      // File content is now handled directly in CodeEditorPanel
+      setFileContents(prev => new Map(prev).set(path, content));
     });
 
     // Handle content updates from other users
     runnerSocket.on('files:contentUpdated', ({ path, content, diffType, updatedBy }) => {
       console.log(`[CodingPage] Content updated by ${updatedBy} for: ${path}`);
-      // This will be handled by CodeEditorPanel to update the editor
+      setFileContents(prev => new Map(prev).set(path, content));
     });
 
     // Handle file creation
@@ -338,6 +351,11 @@ const CodingPagePostPodCreation = () => {
       if (file.type === 'file') {
         const newOpenFiles = [...openFiles, file.path || file.name];
         setOpenFiles(newOpenFiles);
+        
+        // Initialize empty content for new file
+        if (file.path) {
+          setFileContents(prev => new Map(prev).set(file.path, ''));
+        }
       }
     });
 
@@ -350,6 +368,13 @@ const CodingPagePostPodCreation = () => {
         const newStructure = removeFileFromStructure(prev, data.path);
         console.log('New structure after deletion:', newStructure);
         return newStructure;
+      });
+      
+      // Remove from file contents
+      setFileContents(prev => {
+        const newContents = new Map(prev);
+        newContents.delete(data.path);
+        return newContents;
       });
       
       // Update open files
@@ -390,6 +415,17 @@ const CodingPagePostPodCreation = () => {
       const newOpenFiles = openFiles.map(name => name === data.oldPath ? data.newPath : name);
       setOpenFiles(newOpenFiles);
       
+      // Update file contents with new path
+      setFileContents(prev => {
+        const newContents = new Map(prev);
+        const content = newContents.get(data.oldPath);
+        if (content !== undefined) {
+          newContents.delete(data.oldPath);
+          newContents.set(data.newPath, content);
+        }
+        return newContents;
+      });
+      
       // Update active file if it was renamed
       if (activeFile === data.oldPath) {
         setActiveFile(data.newPath);
@@ -400,6 +436,38 @@ const CodingPagePostPodCreation = () => {
     runnerSocket.on('yjs:files', (files: string[]) => {
       console.log('Received Yjs files:', files);
       // This will be used to sync with the editor
+    });
+
+    // Handle file structure changes from terminal operations
+    runnerSocket.on('files:structureChanged', (data: { event: string; path: string; timestamp: number }) => {
+      console.log('[CodingPage] File structure changed:', data);
+      
+      // Refresh the file structure when changes are detected
+      if (socket && isConnected) {
+        console.log('[CodingPage] Requesting fresh file structure due to change');
+        socket.emit('files:refreshStructure');
+      }
+      
+      // Special handling for force refresh events
+      if (data.event === 'force-refresh') {
+        console.log('[CodingPage] Force refresh detected, requesting fresh file structure');
+        setTimeout(() => {
+          if (socket && isConnected) {
+            socket.emit('files:refreshStructure');
+          }
+        }, 1000); // Small delay to ensure file system is ready
+      }
+    });
+
+    // Handle node_modules creation specifically
+    runnerSocket.on('files:nodeModulesCreated', (data: { path: string; timestamp: number }) => {
+      console.log('[CodingPage] node_modules directory created:', data);
+      
+      // Refresh the file structure to show node_modules
+      if (socket && isConnected) {
+        console.log('[CodingPage] Requesting fresh file structure due to node_modules creation');
+        socket.emit('files:refreshStructure');
+      }
     });
 
     setSocket(runnerSocket);
@@ -523,6 +591,62 @@ const CodingPagePostPodCreation = () => {
     setIsFullscreen(!isFullscreen);
   };
 
+  // Code execution functionality
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionResult, setExecutionResult] = useState<{
+    success: boolean;
+    output: string;
+    error: string;
+    executionTime: number;
+  } | null>(null);
+
+  const runCode = () => {
+    if (!socket || !projectId) {
+      console.error('Cannot run code: socket or projectId not available');
+      return;
+    }
+
+    console.log(`[CodingPage] Executing code for project: ${projectId}`);
+    setIsExecuting(true);
+    setExecutionResult(null);
+
+    // Emit code execution request
+    socket.emit('code:execute', { projectId });
+  };
+
+  // Handle code execution result
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleExecutionResult = (result: {
+      success: boolean;
+      output: string;
+      error: string;
+      executionTime: number;
+    }) => {
+      console.log('[CodingPage] Code execution result:', result);
+      setIsExecuting(false);
+      setExecutionResult(result);
+
+      // Show result in console tab
+      if (!activeTabs.includes('console')) {
+        addTab('console');
+      }
+      setSelectedTab('console');
+    };
+
+    socket.on('code:executionResult', handleExecutionResult);
+
+    return () => {
+      socket.off('code:executionResult', handleExecutionResult);
+    };
+  }, [socket, activeTabs]);
+
+  // Function to update file content (for preview updates)
+  const updateFileContent = (path: string, content: string) => {
+    setFileContents(prev => new Map(prev).set(path, content));
+  };
+
 
 
   return (
@@ -538,6 +662,8 @@ const CodingPagePostPodCreation = () => {
         toggleFullscreen={toggleFullscreen}
         toggleTerminal={() => addTab('shell')}
         togglePreview={() => addTab('preview')}
+        runCode={runCode}
+        isExecuting={isExecuting}
         projectId={projectId}
         projectName={location.state?.projectName}
       />
@@ -596,6 +722,7 @@ const CodingPagePostPodCreation = () => {
                     currentTheme={currentTheme}
                     setCurrentTheme={setCurrentTheme}
                     socket={socket}
+                    onFileContentChange={updateFileContent}
                   />
                 </Panel>
                 {activeTabs.length > 0 && (
@@ -627,7 +754,12 @@ const CodingPagePostPodCreation = () => {
                           <div className="flex-1 min-h-0">
                             {activeTabs.map((tab) => (
                               <TabsContent key={tab} value={tab} className="h-full m-0">
-                                {tab === 'preview' && <Preview />}
+                                {tab === 'preview' && (
+                                  <Preview 
+                                    fileContents={fileContents}
+                                    activeFile={activeFile}
+                                  />
+                                )}
                                 {tab === 'shell' && (
                                   <div className="h-full w-full overflow-auto">
                                     <Shell socket={socket} onClose={() => removeTab('shell')} />
@@ -635,7 +767,10 @@ const CodingPagePostPodCreation = () => {
                                 )}
                                 {tab === 'console' && (
                                   <div className="h-full w-full overflow-hidden">
-                                    <Console />
+                                    <Console 
+                                      executionResult={executionResult}
+                                      isExecuting={isExecuting}
+                                    />
                                   </div>
                                 )}
                               </TabsContent>
