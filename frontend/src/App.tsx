@@ -12,6 +12,7 @@ import Home from "./components/dashboard/Home";
 import TemplateSelector from "./components/dashboard/TemplateSelector";
 import CodingPage from "./pages/CodingPage";
 import InvitePage from "./pages/InvitePage";
+import ViewProject from "./components/dashboard/ViewProject";
 
 const App = () => (
         <Routes>
@@ -36,8 +37,10 @@ const App = () => (
             </ProtectedRoute>
           } >
 
+            <Route path="" element={<Home/>}/>
             <Route path="home" element={<Home/>}/>
             <Route path="createProject" element={<TemplateSelector/>}/>
+            <Route path="viewProjects" element={<ViewProject/>}/>
 
           </Route>
           <Route path='/verify-email' element={<VerifyEmail/>} />

@@ -10,8 +10,12 @@ import { AuthContext } from '@/context/AuthContext';
 const Home = () => {
     const { user } = useContext(AuthContext);
     
-    // Get projects from user context (already populated from backend)
-    const projects = user?.projects || [];
+    // Get projects from user context and sort by creation time in descending order
+    const projects = (user?.projects || []).sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.lastUpdatedAt || 0);
+      const dateB = new Date(b.createdAt || b.lastUpdatedAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
 
       const activities = [
         {
@@ -76,11 +80,11 @@ const Home = () => {
               trend="down" 
               icon={<BarChart size={24} className="text-purple-500" />}
             />
-            <StatsCard 
+            {/* <StatsCard 
               title="Upcoming Deadlines" 
               value="0" 
               icon={<Calendar size={24} className="text-yellow-500" />}
-            />
+            /> */}
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -107,7 +111,7 @@ const Home = () => {
                 )}
               </div>
 
-              <div className="bg-dark-accent border border-dark-border rounded-lg p-4">
+              {/* <div className="bg-dark-accent border border-dark-border rounded-lg p-4">
                 <h2 className="text-md font-medium text-white mb-4">Current Usage</h2>
                 <div className="space-y-4">
                   <div>
@@ -138,11 +142,11 @@ const Home = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             <div>
-              <ActivityFeed activities={activities} />
+              {/* <ActivityFeed activities={activities} /> */}
             </div>
           </div>
         </main>

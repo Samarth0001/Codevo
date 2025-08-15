@@ -290,7 +290,7 @@ export const Shell: React.FC<ShellProps> = ({ socket, onClose }) => {
   return (
     <div className="h-full w-full flex flex-col bg-gray-900 overflow-hidden">
       {/* Terminal Controls */}
-      <div className="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700">
+      <div className="flex items-center justify-around p-2 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
           <span className="text-xs text-gray-300">

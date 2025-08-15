@@ -77,7 +77,7 @@ export const ActionSidebar = ({
           </Tooltip>
         </div>
 
-        <div className="p-2">
+        {/* <div className="p-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="hover:bg-gray-700 transition-colors duration-200">
@@ -114,9 +114,9 @@ export const ActionSidebar = ({
               <p>Run</p>
             </TooltipContent>
           </Tooltip>
-        </div>
+        </div> */}
 
-        <div className="mt-auto p-2">
+        {/* <div className="mt-auto p-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="hover:bg-gray-700 transition-colors duration-200">
@@ -127,7 +127,7 @@ export const ActionSidebar = ({
               <p>Take a break</p>
             </TooltipContent>
           </Tooltip>
-        </div>
+        </div> */}
       </TooltipProvider>
     </div>
   );

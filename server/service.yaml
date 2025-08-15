@@ -22,8 +22,8 @@ spec:
           image: amazon/aws-cli
           command: ["/bin/sh", "-c"]
           args:
-            - > #change here
-              aws s3 cp s3://codevo/Base_Code/node-js/ /workspace/ --recursive --endpoint-url https://6927fc6db0d2809c64a8ab88a9ed5c2e.r2.cloudflarestorage.com &&   
+            - > # base code prefix is templated at runtime
+              aws s3 cp "s3://codevo/BASE_CODE_PREFIX" /workspace/ --recursive --endpoint-url https://6927fc6db0d2809c64a8ab88a9ed5c2e.r2.cloudflarestorage.com &&
               echo "Resources copied from S3";
           env:
             
@@ -52,10 +52,10 @@ spec:
               mountPath: /workspace
       containers:
         - name: runner
-          image: extremecoder01/runner:v5    #change here
+          image: RUNNER_IMAGE    # templated at runtime
           ports:
             - containerPort: 3000   # for terminal,chats,other stuffs
-            # - containerPort: 3001   # for preview
+            - containerPort: 3001   # for preview
           env:   # Only needed if runner needs some envs
             - name: WORKER_URL
               value: "http://localhost:3002"
@@ -112,10 +112,11 @@ spec:
       name: user    # will give access to runner
       port: 3000
       targetPort: 3000
-    # - protocol: TCP
-    #   name: preview    # will give access to preview
-    #   port: 3001
-    #   targetPort: 3001
+    - protocol: TCP
+      name: preview    # will give access to runner
+      port: 3001
+      targetPort: 3001
+
 
 
 # ---
@@ -140,6 +141,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata: 
   name: service_name
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/websocket-services: preview-service
 spec:
   ingressClassName: nginx
   rules:
@@ -153,19 +157,19 @@ spec:
             name: service_name
             port:
               number: 3000
-      - path: /preview/socket.io
-        pathType: Prefix
-        backend:
-          service:
-            name: service_name
-            port:
-              number: 3000
       - path: /preview
         pathType: Prefix
         backend:
           service:
-            name: service_name            # 👈 your runner service name
+            name: service_name         
             port:
-              number: 3000  # 👈 Changed to 3000 - runner handles preview
+              number: 3000 
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: service_name          
+            port:
+              number: 3001  
 
       

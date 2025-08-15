@@ -58,7 +58,7 @@ const createProjectInDB = async (projectData: {
 
 
 // Kubernetes operations function
-const createKubernetesResources = async (projectId: string) => {
+const createKubernetesResources = async (projectId: string, baseCodePrefix: string, runnerImage: string) => {
     // Dynamic import for CommonJS compatibility
     const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
 
@@ -73,8 +73,12 @@ const createKubernetesResources = async (projectId: string) => {
         const fileContent = fs.readFileSync(filePath, 'utf8');
         const docs = yaml.parseAllDocuments(fileContent).map((doc) => {
             let docString = doc.toString();
-            const regex = new RegExp(`service_name`, 'g');
-            docString = docString.replace(regex, projectId);
+            // Replace service name
+            docString = docString.replace(new RegExp(`service_name`, 'g'), projectId);
+            // Replace base code prefix for initContainer copy command
+            docString = docString.replace(new RegExp(`BASE_CODE_PREFIX`, 'g'), baseCodePrefix);
+            // Replace runner image
+            docString = docString.replace(new RegExp(`RUNNER_IMAGE`, 'g'), runnerImage);
             console.log(docString);
             return yaml.parse(docString);
         });
@@ -299,7 +303,7 @@ export const createProject = async(req: Request, res: Response): Promise<any> =>
         templateId,
         userId,
         visibility,
-        tags
+        tags 
     });
 
     // Validate that templateId is a valid MongoDB ObjectId
@@ -344,10 +348,55 @@ export const createProject = async(req: Request, res: Response): Promise<any> =>
             });
         }
 
-        // 2. Create Kubernetes resources
-        await createKubernetesResources(uniqueId);
+        // 2. Choose base code prefix and runner image based on template
+        // Fetch template to determine slug or name
+        const template = await Template.findById(templateId);
+        const templateName: string = template?.name || '';
+        const templateSlug: string = template?.slug || '';
+        let baseCodePrefix = '';
+        let runnerImage = '';
+        
+        if (existingProject) {
+            // For existing projects, use the project's specific directory and template
+            baseCodePrefix = `Project_Code/${uniqueId}/`;
+            
+            // Get the template from the existing project
+            const existingTemplate = await Template.findById(existingProject.template);
+            const existingTemplateName: string = existingTemplate?.name || '';
+            const existingTemplateSlug: string = existingTemplate?.slug || '';
+            
+            // Set runner image based on the existing project's template
+            if (existingTemplateName === 'React Javascript' || existingTemplateSlug === 'React Javascript') {
+                runnerImage = 'extremecoder01/runner-react:v1';
+            } else if (existingTemplateName === 'Node.js' || existingTemplateSlug === 'node-js') {
+                runnerImage = 'extremecoder01/runner:v5';
+            } else {
+                // Default to node runner
+                runnerImage = 'extremecoder01/runner:v5';
+            }
+            
+            console.log('CreateProject - Using existing project directory:', baseCodePrefix, 'with template:', existingTemplateName);
+        } else {
+            // For new projects, use base template code
+            // Map known templates using exact names/slugs
+            if (templateName === 'React Javascript' || templateSlug === 'React Javascript') {
+                baseCodePrefix = 'Base_Code/React Javascript/';
+                runnerImage = 'extremecoder01/runner-react:v1';
+            } else if (templateName === 'Node.js' || templateSlug === 'node-js') {
+                baseCodePrefix = 'Base_Code/node-js/';
+                runnerImage = 'extremecoder01/runner:v5';
+            } else {
+                // Default to node base code
+                baseCodePrefix = 'Base_Code/node-js/';
+                runnerImage = 'extremecoder01/runner:v5';
+            }
+            console.log('CreateProject - Using base template directory:', baseCodePrefix);
+        }
 
-        // 3. Add project to Redis active projects
+        // 3. Create Kubernetes resources with templating
+        await createKubernetesResources(uniqueId, baseCodePrefix, runnerImage);
+
+        // 4. Add project to Redis active projects
         await userJoinedProject(uniqueId, userId);
 
         res.status(200).send({ 
@@ -360,6 +409,105 @@ export const createProject = async(req: Request, res: Response): Promise<any> =>
         res.status(500).send({ 
             success: false,
             message: "Failed to create project or resources",
+            error: error.message 
+        });
+    }
+};
+
+export const updateProjectDescription = async (req: AuthenticatedRequest, res: Response) => {
+    const { projectId, description } = req.body;
+    
+    if (!projectId || description === undefined) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Project ID and description are required' 
+        });
+    }
+
+    try {
+        const updatedProject = await Project.findOneAndUpdate(
+            { projectId: projectId },
+            { 
+                description: description,
+                lastUpdatedAt: new Date(),
+                lastUpdatedBy: req.user?.id
+            },
+            { new: true }
+        );
+
+        if (!updatedProject) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Project not found' 
+            });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Project description updated successfully',
+            project: updatedProject
+        });
+    } catch (error: any) {
+        console.error('Error updating project description:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to update project description',
+            error: error.message 
+        });
+    }
+};
+
+export const deleteProject = async (req: AuthenticatedRequest, res: Response) => {
+    const { projectId } = req.body;
+    
+    if (!projectId) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Project ID is required' 
+        });
+    }
+
+    try {
+        // Find the project first to get the user ID
+        const project = await Project.findOne({ projectId: projectId });
+        
+        if (!project) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Project not found' 
+            });
+        }
+
+        // Check if the user is the project creator or has permission
+        if (project.projectCreater.toString() !== req.user?.id) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'You do not have permission to delete this project' 
+            });
+        }
+
+        // Remove project from user's projects array
+        await User.findByIdAndUpdate(
+            project.projectCreater,
+            { $pull: { projects: project._id } }
+        );
+
+        // Delete the project from database
+        await Project.findByIdAndDelete(project._id);
+
+        // TODO: Clean up Kubernetes resources
+        // TODO: Clean up S3 files
+        // TODO: Remove from Redis active projects
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Project deleted successfully'
+        });
+    } catch (error: any) {
+        console.error('Error deleting project:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to delete project',
             error: error.message 
         });
     }

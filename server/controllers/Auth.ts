@@ -423,6 +423,7 @@ const userDetails = async(req:AuthenticationRequest,res: Response) => {
             stars: 0, // Placeholder - could be implemented later
             forks: project.collaborators?.length || 0,
             projectId: project.projectId,
+            templateId: project.template?._id || project.template, // Include template ID
             createdAt: project.createdAt,
             lastUpdatedAt: project.lastUpdatedAt || project.createdAt,
             visibility: project.visibility,

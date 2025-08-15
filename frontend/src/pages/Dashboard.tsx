@@ -7,46 +7,8 @@ import { AuthContext } from "@/context/AuthContext";
 import Spinner from "@/components/auth/Spinner";
 
 const Dashboard = () => {
+
   // Mock data
-  const projects = [
-    {
-      id: 1,
-      name: "react-dashboard",
-      description: "A beautiful React dashboard with Tailwind CSS and TypeScript.",
-      language: "TypeScript",
-      lastUpdated: "2h ago",
-      stars: 24,
-      forks: 5,
-    },
-    {
-      id: 2,
-      name: "api-client",
-      description: "REST API client with authentication, request caching, and error handling.",
-      language: "JavaScript",
-      lastUpdated: "1d ago",
-      stars: 18,
-      forks: 3,
-    },
-    {
-      id: 3,
-      name: "ml-classifier",
-      description: "Machine learning image classification model with Python and TensorFlow.",
-      language: "Python",
-      lastUpdated: "3d ago",
-      stars: 42,
-      forks: 8,
-    },
-    {
-      id: 4,
-      name: "landing-page",
-      description: "Responsive landing page template with smooth animations.",
-      language: "HTML",
-      lastUpdated: "1w ago",
-      stars: 12,
-      forks: 2,
-    },
-  ];
-  
   const activities = [
     {
       id: 1,

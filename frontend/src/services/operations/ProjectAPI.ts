@@ -8,7 +8,8 @@ const {
     GET_PROJECT_DETAILS_API,
     GET_PROJECT_STATUS_API,
     JOIN_PROJECT_API,
-
+    UPDATE_PROJECT_API,
+    DELETE_PROJECT_API,
 } = projectEndPoints;
 
 export const copyBaseCode = async(data: any,setLoading:any, navigate : (path: string) => void) => {
@@ -94,6 +95,37 @@ export const checkProjectStatus = async(projectId: string) => {
     }
     catch(err:any){
         console.log("Error while checking project status ",err)
+        throw err;
+    }
+}
+
+export const updateProjectDescription = async(projectId: string, description: string) => {
+    try{
+        console.log('ProjectAPI - updateProjectDescription called for:', projectId, 'description:', description);
+        const response = await apiConnector("PUT", UPDATE_PROJECT_API, {
+            projectId,
+            description
+        });
+        console.log('ProjectAPI - updateProjectDescription response:', response);
+        return response.data;
+    }
+    catch(err:any){
+        console.log("Error while updating project description ",err)
+        throw err;
+    }
+}
+
+export const deleteProject = async(projectId: string) => {
+    try{
+        console.log('ProjectAPI - deleteProject called for:', projectId);
+        const response = await apiConnector("DELETE", DELETE_PROJECT_API, {
+            projectId
+        });
+        console.log('ProjectAPI - deleteProject response:', response);
+        return response.data;
+    }
+    catch(err:any){
+        console.log("Error while deleting project ",err)
         throw err;
     }
 }

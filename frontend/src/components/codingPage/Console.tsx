@@ -14,7 +14,7 @@ interface ConsoleProps {
 }
 
 export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
-  const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn'; message: string}[]>([
+  const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn' | 'command' | 'output-label'; message: string}[]>([
     { type: 'log', message: '> Console ready' },
     { type: 'log', message: '> Click the Run button to execute your code' }
   ]);
@@ -33,26 +33,55 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
     if (isExecuting) {
       setLogs(prev => [
         ...prev,
-        { type: 'log', message: '> 🚀 Executing code...' }
+        { type: 'log', message: '> Executing code...' }
       ]);
     }
   }, [isExecuting]);
 
+  // Process output to identify commands and color them
+  const processOutput = (output: string) => {
+    const lines = output.split('\n');
+    const processedLines: {type: 'log' | 'command'; message: string}[] = [];
+    
+    for (const line of lines) {
+      // Skip dotenv injection messages
+      if (line.includes('[dotenv@') && line.includes('injecting env')) {
+        continue;
+      }
+      
+      // Check if line looks like a command (starts with common command patterns)
+      const trimmedLine = line.trim();
+      const isCommand = /^(npm|node|python|git|cd|ls|cat|echo|curl|wget|npm install|npm run|npm start|npm test|python3|pip|pip3)/.test(trimmedLine) ||
+                       /^root@codevo:.*#/.test(line) || // Terminal prompt
+                       /^[a-zA-Z0-9_]+@[a-zA-Z0-9_]+:.*[$#]/.test(line); // General terminal prompt
+      
+      if (isCommand && trimmedLine) {
+        processedLines.push({ type: 'command', message: line });
+      } else {
+        processedLines.push({ type: 'log', message: line });
+      }
+    }
+    
+    return processedLines;
+  };
+
   // Handle execution results
   useEffect(() => {
     if (executionResult) {
-      const newLogs: {type: 'log' | 'error' | 'warn'; message: string}[] = [];
+      const newLogs: {type: 'log' | 'error' | 'warn' | 'command' | 'output-label'; message: string}[] = [];
       
       // Add execution result header
       if (executionResult.success) {
-        newLogs.push({ type: 'log', message: `> ✅ Code executed successfully in ${executionResult.executionTime}ms` });
+        newLogs.push({ type: 'command', message: `> Code executed successfully in ${executionResult.executionTime}ms` });
       } else {
-        newLogs.push({ type: 'error', message: `> ❌ Code execution failed in ${executionResult.executionTime}ms` });
+        newLogs.push({ type: 'error', message: `> Code execution failed in ${executionResult.executionTime}ms` });
       }
 
       // Add output if any
       if (executionResult.output) {
-        newLogs.push({ type: 'log', message: `> Output:\n${executionResult.output}` });
+        newLogs.push({ type: 'output-label', message: `> Output:` });
+        const processedOutput = processOutput(executionResult.output);
+        newLogs.push(...processedOutput);
       }
 
       // Add error if any
@@ -67,14 +96,18 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
     }
   }, [executionResult]);
 
-  const getLogStyle = (type: 'log' | 'error' | 'warn') => {
+  const getLogStyle = (type: 'log' | 'error' | 'warn' | 'command' | 'output-label') => {
     switch (type) {
       case 'error':
         return 'text-red-400';
       case 'warn':
         return 'text-yellow-400';
-      default:
+      case 'command':
+        return 'text-yellow-400';
+      case 'output-label':
         return 'text-blue-300';
+      default:
+        return 'text-white';
     }
   };
 

@@ -15,7 +15,7 @@ interface StatsCardProps {
             <p className="text-sm text-gray-400">{title}</p>
             <p className="text-2xl font-semibold text-white mt-1">{value}</p>
             
-            {change && trend && (
+            {/* {change && trend && (
               <div className="mt-1 flex items-center">
                 <span
                   className={`text-xs font-medium ${
@@ -31,7 +31,7 @@ interface StatsCardProps {
                 </span>
                 <span className="text-xs text-gray-500 ml-1">vs last period</span>
               </div>
-            )}
+            )} */}
           </div>
           <div className="bg-dark-bg p-3 rounded-lg">
             {icon}

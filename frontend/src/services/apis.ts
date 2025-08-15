@@ -20,7 +20,8 @@ export const projectEndPoints = {
     GET_PROJECT_DETAILS_API : BASE_URL + '/project',
     GET_PROJECT_STATUS_API : BASE_URL + '/projectStatus',
     JOIN_PROJECT_API : BASE_URL + '/joinProject',
-
+    UPDATE_PROJECT_API : BASE_URL + '/updateDescription',
+    DELETE_PROJECT_API : BASE_URL + '/deleteProject',
 }
 
 export const invitationEndPoints = {

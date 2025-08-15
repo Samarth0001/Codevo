@@ -1,7 +1,8 @@
 
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/button-custom";
+import { AuthContext } from "@/context/AuthContext";
 
 interface ProjectCardProps {
   id: string;
@@ -13,6 +14,9 @@ interface ProjectCardProps {
   stars: number;
   forks: number;
   projectId?: string;
+  templateId?: string;
+  visibility?: string;
+  tags?: string[];
 }
 
 const ProjectCard = ({
@@ -24,10 +28,14 @@ const ProjectCard = ({
   lastUpdatedBy,
   stars,
   forks,
-  projectId
+  projectId,
+  templateId,
+  visibility,
+  tags
 }: ProjectCardProps) => {
   const [isStarred, setIsStarred] = useState(false);
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
 
   const toggleStar = () => {
     setIsStarred(!isStarred);
@@ -92,13 +100,31 @@ const ProjectCard = ({
         <Button 
           variant="outline" 
           className="text-xs py-1 px-3"
-          onClick={() => navigate(`/coding/${projectId || id}`)}
+          onClick={() => navigate(`/coding/${projectId || id}`, {
+            state: {
+              projectName: name,
+              description,
+              templateId,
+              userId: user?._id,
+              visibility,
+              tags
+            }
+          })}
         >
           View Code
         </Button>
         <Button 
           className="text-xs py-1 px-3 bg-codevo-blue hover:bg-codevo-blue/90"
-          onClick={() => navigate(`/coding/${projectId || id}`)}
+          onClick={() => navigate(`/coding/${projectId || id}`, {
+            state: {
+              projectName: name,
+              description,
+              templateId,
+              userId: user?._id,
+              visibility,
+              tags
+            }
+          })}
         >
           Open IDE
         </Button>

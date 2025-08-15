@@ -18,11 +18,9 @@ import { useTemplates } from "@/context/TemplateContext";
 import { v4 as uuidv4 } from 'uuid';
 
 
-interface TemplateSelectorProps {
-  onCancel: () => void;
-}
 
-const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onCancel }) => {
+
+const TemplateSelector = () => {
   const adjectives = [
     "Agile", "Brave", "Calm", "Clever", "Curious", "Daring", "Eager", "Elegant", "Fancy", "Fierce",
     "Gentle", "Happy", "Jolly", "Kind", "Lively", "Mighty", "Noble", "Quick", "Quiet", "Rapid",
@@ -62,9 +60,9 @@ const generateRandomName = (): string => {
   const navigate = useNavigate();
   
   const tabs = [
-    { id: "agent", name: "Create with Replit Agent" },
+    // { id: "agent", name: "Create with Replit Agent" },
     { id: "template", name: "Choose a Template" },
-    { id: "github", name: "Import from GitHub" },
+    // { id: "github", name: "Import from GitHub" },
   ];
 
   const { templates, loading: templatesLoading, error: templatesError } = useTemplates();
@@ -194,7 +192,7 @@ const generateRandomName = (): string => {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-white">Create a new App</h1>
-          <button onClick={onCancel} className="text-gray-400 hover:text-white">
+          <button className="text-gray-400 hover:text-white">
             <X size={24} />
           </button>
         </div>

@@ -110,13 +110,48 @@ export const FileExplorer = ({
       case 'tsx':
         return <div className="w-4 h-4 text-yellow-400 font-mono text-xs font-bold">JS</div>;
       case 'css':
+      case 'scss':
+      case 'sass':
+      case 'less':
         return <div className="w-4 h-4 text-blue-400 font-mono text-xs font-bold">CSS</div>;
       case 'html':
+      case 'htm':
         return <div className="w-4 h-4 text-orange-400 font-mono text-xs font-bold">HTML</div>;
       case 'json':
-        return <div className="w-4 h-4 text-green-400 font-mono text-xs font-bold">{ }</div>;
+        return <div className="w-4 h-4 text-green-400 font-mono text-xs font-bold">JSON</div>;
       case 'md':
+      case 'markdown':
         return <div className="w-4 h-4 text-gray-400 font-mono text-xs font-bold">MD</div>;
+      case 'env':
+      case 'env.local':
+      case 'env.development':
+      case 'env.production':
+        return <div className="w-4 h-4 text-purple-400 font-mono text-xs font-bold">ENV</div>;
+      case 'gitignore':
+      case 'gitattributes':
+        return <div className="w-4 h-4 text-red-400 font-mono text-xs font-bold">GIT</div>;
+      case 'yml':
+      case 'yaml':
+        return <div className="w-4 h-4 text-cyan-400 font-mono text-xs font-bold">YML</div>;
+      case 'xml':
+        return <div className="w-4 h-4 text-orange-400 font-mono text-xs font-bold">XML</div>;
+      case 'svg':
+        return <div className="w-4 h-4 text-pink-400 font-mono text-xs font-bold">SVG</div>;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+      case 'ico':
+        return <div className="w-4 h-4 text-green-400 font-mono text-xs font-bold">IMG</div>;
+      case 'txt':
+        return <div className="w-4 h-4 text-gray-300 font-mono text-xs font-bold">TXT</div>;
+      case 'log':
+        return <div className="w-4 h-4 text-red-300 font-mono text-xs font-bold">LOG</div>;
+      case 'lock':
+        return <div className="w-4 h-4 text-yellow-300 font-mono text-xs font-bold">LOCK</div>;
+      case 'config':
+      case 'conf':
+        return <div className="w-4 h-4 text-blue-300 font-mono text-xs font-bold">CFG</div>;
       default:
         return <div className="w-4 h-4 text-gray-400">•</div>;
     }
@@ -165,6 +200,19 @@ export const FileExplorer = ({
   const startRename = (filePath: string, currentName: string) => {
     setRenamingFile(filePath);
     setNewFileName(currentName);
+  };
+
+  // Sort files and folders in a logical order
+  const sortFileItems = (items: FileItem[]): FileItem[] => {
+    return items.sort((a, b) => {
+      // First, sort by type: folders first, then files
+      if (a.type !== b.type) {
+        return a.type === 'folder' ? -1 : 1;
+      }
+      
+      // If both are folders or both are files, sort alphabetically
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
   };
 
   const renderFileItem = (item: FileItem, depth = 0) => {
@@ -248,7 +296,7 @@ export const FileExplorer = ({
 
         {item.type === 'folder' && isExpanded && item.children && (
           <div>
-            {item.children.map(child => renderFileItem(child, depth + 1))}
+            {sortFileItems(item.children).map(child => renderFileItem(child, depth + 1))}
           </div>
         )}
       </div>
@@ -318,7 +366,7 @@ export const FileExplorer = ({
           }
         }}
       >
-        {files.map(file => renderFileItem(file))}
+        {Array.isArray(files) ? sortFileItems(files).map(file => renderFileItem(file)) : <div className="p-2 text-gray-500 text-sm">No files available</div>}
       </div>
       
       {/* Custom Context Menu */}
@@ -379,7 +427,7 @@ export const FileExplorer = ({
       {!isConnected && (
         <div className="p-2 bg-yellow-600/20 border-t border-yellow-600/40">
           <div className="text-xs text-yellow-400 text-center">
-            Disconnected from runner
+            Disconnected
           </div>
         </div>
       )}

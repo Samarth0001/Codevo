@@ -18,11 +18,11 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [navigation, setNavigation] = useState<NavItem[]>([
     { name: "Home", icon: <LayoutDashboard size={20} />, href: "/dashboard/home", current: false },
-    { name: "Projects", icon: <Grid size={20} />, href: "/dashboard/projects", current: false },
-    { name: "Analytics", icon: <BarChart size={20} />, href: "/dashboard/analytics", current: false },
-    { name: "Calendar", icon: <Calendar size={20} />, href: "/dashboard/calendar", current: false },
-    { name: "Messages", icon: <MessageSquare size={20} />, href: "/dashboard/messages", current: false },
-    { name: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", current: false },
+    { name: "Projects", icon: <Grid size={20} />, href: "/dashboard/viewProjects", current: false },
+    // { name: "Analytics", icon: <BarChart size={20} />, href: "/dashboard/analytics", current: false },
+    // { name: "Calendar", icon: <Calendar size={20} />, href: "/dashboard/calendar", current: false },
+    // { name: "Messages", icon: <MessageSquare size={20} />, href: "/dashboard/messages", current: false },
+    // { name: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", current: false },
   ]);
 
   const handleNavClick = (index: number) => {
@@ -33,7 +33,7 @@ const Sidebar = () => {
     setNavigation(newNavigation);
   };
 
-  const {setUser,setLoading,setLoggedIn} = useContext(AuthContext)
+  const {user, setUser,setLoading,setLoggedIn} = useContext(AuthContext)
   const navigate = useNavigate();
 
   return (
@@ -138,8 +138,8 @@ const Sidebar = () => {
             </div>
             {!collapsed && (
               <div className="ml-3">
-                <p className="text-sm font-medium text-white">John Doe</p>
-                <p className="text-xs text-gray-400">john@example.com</p>
+                <p className="text-sm font-medium text-white">{user?.name}</p>
+                <p className="text-xs text-gray-400">{user?.email}</p>
               </div>
             )}
           </div>

@@ -25,7 +25,7 @@ import { AuthContext } from "@/context/AuthContext";
 
 type TabType = 'preview' | 'shell' | 'console';
 
-interface FileItem {
+interface FileItem { 
   id: string;
   name: string;
   type: 'file' | 'folder';
@@ -280,18 +280,23 @@ const CodingPagePostPodCreation = () => {
       }
       
       // Set open files from structure
-      const fileNames = structure
+      const filePaths = structure
         .filter(item => item.type === 'file')
-        .map(item => item.name);
+        .map(item => item.path || item.name);
       
-      if (fileNames.length > 0) {
-        setOpenFiles(fileNames);
-        // Prefer main.js, then index.js, then index.html, then any .js file, then first file
-        let preferredFile = fileNames.find(name => name === "main.js") || 
-                           fileNames.find(name => name === "index.js") ||  
-                           fileNames.find(name => name === "index.html") || 
-                           fileNames.find(name => name.endsWith(".js")) || 
-                           fileNames[0];
+      if (filePaths.length > 0) {
+        setOpenFiles(filePaths);
+        // Prefer src/App.jsx, then src/main.jsx, then main.js, then index.js, then index.html, then any .jsx file, then any .js file, then first file
+        let preferredFile = filePaths.find(path => path === "src/App.jsx") || 
+                           filePaths.find(path => path === "App.jsx") || 
+                           filePaths.find(path => path === "src/main.jsx") || 
+                           filePaths.find(path => path === "main.jsx") || 
+                           filePaths.find(path => path === "main.js") || 
+                           filePaths.find(path => path === "index.js") ||  
+                           filePaths.find(path => path === "index.html") || 
+                           filePaths.find(path => path.endsWith(".jsx")) || 
+                           filePaths.find(path => path.endsWith(".js")) || 
+                           filePaths[0];
         setActiveFile(preferredFile);
         console.log(`[CodingPage] Set active file to: ${preferredFile}`);
       }
@@ -320,13 +325,13 @@ const CodingPagePostPodCreation = () => {
       
       // Update open files if not already set
       if (openFiles.length === 0) {
-        const fileNames = files
+        const filePaths = files
           .filter(item => item.type === 'file')
-          .map(item => item.name);
+          .map(item => item.path || item.name);
         
-        if (fileNames.length > 0) {
-          setOpenFiles(fileNames);
-          setActiveFile(fileNames[0]);
+        if (filePaths.length > 0) {
+          setOpenFiles(filePaths);
+          setActiveFile(filePaths[0]);
         }
       }
     });
@@ -440,11 +445,13 @@ const CodingPagePostPodCreation = () => {
 
     // Handle file structure changes from terminal operations
     runnerSocket.on('files:structureChanged', (data: { event: string; path: string; timestamp: number }) => {
-      console.log('[CodingPage] File structure changed:', data);
+      // Only log important events, not node_modules changes
+      if (data.event === 'force-refresh' || !data.path.includes('node_modules')) {
+        console.log('[CodingPage] File structure changed:', data);
+      }
       
       // Refresh the file structure when changes are detected
       if (socket && isConnected) {
-        console.log('[CodingPage] Requesting fresh file structure due to change');
         socket.emit('files:refreshStructure');
       }
       
@@ -461,11 +468,8 @@ const CodingPagePostPodCreation = () => {
 
     // Handle node_modules creation specifically
     runnerSocket.on('files:nodeModulesCreated', (data: { path: string; timestamp: number }) => {
-      console.log('[CodingPage] node_modules directory created:', data);
-      
-      // Refresh the file structure to show node_modules
+      // Refresh the file structure to show node_modules (silently)
       if (socket && isConnected) {
-        console.log('[CodingPage] Requesting fresh file structure due to node_modules creation');
         socket.emit('files:refreshStructure');
       }
     });
@@ -671,7 +675,7 @@ const CodingPagePostPodCreation = () => {
       {/* Connection Status */}
       {!isConnected && (
         <div className="bg-yellow-600 text-white px-4 py-2 text-center">
-          Connecting to runner container...
+          Connecting...
         </div>
       )}
 
