@@ -1,18 +1,10 @@
 import Redis from 'ioredis';
-import { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } from '@kubernetes/client-node';
-
-// Initialize Kubernetes client
-const kubeconfig = new KubeConfig();
-kubeconfig.loadFromDefault();
-const appsV1Api = kubeconfig.makeApiClient(AppsV1Api);
-const coreV1Api = kubeconfig.makeApiClient(CoreV1Api);
-const networkingV1Api = kubeconfig.makeApiClient(NetworkingV1Api);
 
 function startCleanupListener() {
   console.log('[CleanupListener] Starting Redis keyspace notification listener...');
   
   const sub = new Redis({ 
-    host: process.env.REDIS_HOST || 'localhost', 
+    host: process.env.REDIS_HOST || 'redis', 
     port: 6379,
     maxRetriesPerRequest: 5,
     lazyConnect: true,
@@ -55,10 +47,17 @@ function startCleanupListener() {
 async function cleanupProject(projectId: string) {
   try {
     console.log(`[CleanupListener] Cleaning up project: ${projectId}`);
+    const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
+    const kubeconfig = new KubeConfig();
+    kubeconfig.loadFromDefault();
+    const coreV1Api = kubeconfig.makeApiClient(CoreV1Api);
+    const appsV1Api = kubeconfig.makeApiClient(AppsV1Api);
+    const networkingV1Api = kubeconfig.makeApiClient(NetworkingV1Api);
+
     
     // Send last update info to database before cleanup
     try {
-      const runnerUrl = `http://${projectId}.127.0.0.1.sslip.io`;
+      const runnerUrl = process.env.RUNNER_URL || `http://${projectId}:3000` ||  `http://${projectId}.127.0.0.1.sslip.io`;
       await fetch(`${runnerUrl}/sendLastUpdateInfo`, {
         method: 'POST',
         headers: {
