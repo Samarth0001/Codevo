@@ -3,7 +3,7 @@ import Hero from "@/components/homepage/Hero";
 import Features from "@/components/homepage/Features";
 import HowItWorks from "@/components/homepage/HowItWorks";
 import Testimonials from "@/components/homepage/Testimonials";
-import Pricing from "@/components/homepage/Pricing";
+// import Pricing from "@/components/homepage/Pricing";
 import CTA from "@/components/homepage/CTA";
 import Footer from "@/components/homepage/Footer";
 import Spinner from "@/components/auth/Spinner";
@@ -30,7 +30,7 @@ const Index = () => {
           <HowItWorks />
         </div>
         <Testimonials />
-        <Pricing />
+        {/* <Pricing /> */}
         <CTA />
       </main>
       <Footer />

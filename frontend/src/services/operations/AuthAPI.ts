@@ -2,7 +2,7 @@ import { authEndpoints } from '../apis'
 import { apiConnector } from '../apiConnector';
 import toast from 'react-hot-toast';
 
-const {LOGIN_API, VERIFY_OTP_API, VERIFY_SIGNUP_API, SENDOTP_API, CHANGEPASS_API,LOGOUT_API} = authEndpoints;
+const {LOGIN_API, VERIFY_OTP_API, VERIFY_SIGNUP_API, SENDOTP_API, CHANGEPASS_API,LOGOUT_API, USER_DETAILS_API} = authEndpoints;
 
 export async function login(
   data: any,
@@ -15,6 +15,7 @@ export async function login(
   setLoading(true);
 
   try {
+    console.log(LOGIN_API);
     const response = await apiConnector('POST', LOGIN_API, data);
     
     console.log("Printing response -> ", response);
@@ -26,12 +27,37 @@ export async function login(
     toast.success("Login Successful")
     setLoggedIn(true);
 
-    // we want image and info of user
-    const userImage = response?.data?.user?.image ? 
-    response?.data?.user?.image : 
-    `https://api.dicebear.com/9.x/initials/svg?seed=${response?.data?.user.name}`
-
-    setUser({...response?.data?.user , image : userImage});
+    // After successful login, fetch complete user details including projects
+    try {
+      const userDetailsResponse = await apiConnector("GET", USER_DETAILS_API, {
+        withCredentials: true
+      });
+      
+      if(userDetailsResponse?.data?.success) {
+        // Set user data with complete details including projects
+        const userImage = userDetailsResponse?.data?.user?.image ? 
+          userDetailsResponse?.data?.user?.image : 
+          `https://api.dicebear.com/9.x/initials/svg?seed=${userDetailsResponse?.data?.user.name}`;
+        
+        setUser({...userDetailsResponse?.data?.user, image: userImage});
+      } else {
+        // Fallback to login response if user details fetch fails
+        const userImage = response?.data?.user?.image ? 
+          response?.data?.user?.image : 
+          `https://api.dicebear.com/9.x/initials/svg?seed=${response?.data?.user.name}`;
+        
+        setUser({...response?.data?.user, image: userImage});
+      }
+    } catch (userDetailsError) {
+      console.log("Error fetching user details after login:", userDetailsError);
+      // Fallback to login response if user details fetch fails
+      const userImage = response?.data?.user?.image ? 
+        response?.data?.user?.image : 
+        `https://api.dicebear.com/9.x/initials/svg?seed=${response?.data?.user.name}`;
+      
+      setUser({...response?.data?.user, image: userImage});
+    }
+    
     navigate('/dashboard/home')
   }
   catch(err){

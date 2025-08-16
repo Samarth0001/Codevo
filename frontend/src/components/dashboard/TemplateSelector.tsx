@@ -331,7 +331,7 @@ const generateRandomName = (): string => {
               />
             </div>
             
-            <div className="mb-6">
+            {/* <div className="mb-6">
               <h2 className="text-white mb-3">Privacy</h2>
               <div className="space-y-3">
                 <div 
@@ -378,7 +378,7 @@ const generateRandomName = (): string => {
               <div className="w-full bg-dark-border rounded-full h-1.5 mb-4">
                 <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: "33%" }}></div>
               </div>
-            </div>
+            </div> */}
 
             <div className="bg-dark-bg py-4 flex justify-end rounded-b-lg">
               {/* <Button onClick={onCancel} variant="outline" className="mr-2">

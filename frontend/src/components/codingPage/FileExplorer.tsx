@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Folder, Search, Plus, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FileIcon } from './FileIcons';
 
 interface FileItem {
   id: string;
@@ -62,6 +63,13 @@ export const FileExplorer = ({
   onGetFileContent,
   isConnected = true 
 }: FileExplorerProps) => {
+  // Use the files prop from parent component instead of local state
+  const [localFiles, setLocalFiles] = useState<FileItem[]>(files);
+  
+  // Update local files when prop changes
+  useEffect(() => {
+    setLocalFiles(files);
+  }, [files]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src']));
   const [searchQuery, setSearchQuery] = useState('');
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
@@ -73,6 +81,27 @@ export const FileExplorer = ({
     y: number;
     item: FileItem | null;
   }>({ show: false, x: 0, y: 0, item: null });
+  
+  // Modal state
+  const [modal, setModal] = useState<{
+    show: boolean;
+    type: 'create' | 'delete' | null;
+    title: string;
+    message: string;
+    inputValue: string;
+    inputPlaceholder: string;
+    isFolder: boolean;
+    filePath?: string;
+  }>({
+    show: false,
+    type: null,
+    title: '',
+    message: '',
+    inputValue: '',
+    inputPlaceholder: '',
+    isFolder: false
+  });
+  
   const {activeFile, setActiveFile} = useEditor();
 
   // Close context menu when clicking outside
@@ -102,59 +131,8 @@ export const FileExplorer = ({
     setCurrentFolder(folderPath || '');
   };
 
-  const getIconForFile = (extension?: string) => { 
-    switch (extension) {
-      case 'js':
-      case 'jsx':
-      case 'ts':
-      case 'tsx':
-        return <div className="w-4 h-4 text-yellow-400 font-mono text-xs font-bold">JS</div>;
-      case 'css':
-      case 'scss':
-      case 'sass':
-      case 'less':
-        return <div className="w-4 h-4 text-blue-400 font-mono text-xs font-bold">CSS</div>;
-      case 'html':
-      case 'htm':
-        return <div className="w-4 h-4 text-orange-400 font-mono text-xs font-bold">HTML</div>;
-      case 'json':
-        return <div className="w-4 h-4 text-green-400 font-mono text-xs font-bold">JSON</div>;
-      case 'md':
-      case 'markdown':
-        return <div className="w-4 h-4 text-gray-400 font-mono text-xs font-bold">MD</div>;
-      case 'env':
-      case 'env.local':
-      case 'env.development':
-      case 'env.production':
-        return <div className="w-4 h-4 text-purple-400 font-mono text-xs font-bold">ENV</div>;
-      case 'gitignore':
-      case 'gitattributes':
-        return <div className="w-4 h-4 text-red-400 font-mono text-xs font-bold">GIT</div>;
-      case 'yml':
-      case 'yaml':
-        return <div className="w-4 h-4 text-cyan-400 font-mono text-xs font-bold">YML</div>;
-      case 'xml':
-        return <div className="w-4 h-4 text-orange-400 font-mono text-xs font-bold">XML</div>;
-      case 'svg':
-        return <div className="w-4 h-4 text-pink-400 font-mono text-xs font-bold">SVG</div>;
-      case 'png':
-      case 'jpg':
-      case 'jpeg':
-      case 'gif':
-      case 'ico':
-        return <div className="w-4 h-4 text-green-400 font-mono text-xs font-bold">IMG</div>;
-      case 'txt':
-        return <div className="w-4 h-4 text-gray-300 font-mono text-xs font-bold">TXT</div>;
-      case 'log':
-        return <div className="w-4 h-4 text-red-300 font-mono text-xs font-bold">LOG</div>;
-      case 'lock':
-        return <div className="w-4 h-4 text-yellow-300 font-mono text-xs font-bold">LOCK</div>;
-      case 'config':
-      case 'conf':
-        return <div className="w-4 h-4 text-blue-300 font-mono text-xs font-bold">CFG</div>;
-      default:
-        return <div className="w-4 h-4 text-gray-400">•</div>;
-    }
+  const getIconForFile = (fileName: string, extension?: string) => { 
+    return <FileIcon fileName={fileName} extension={extension} className="w-4 h-4" />;
   };
 
   const handleFileClick = (fileId: string, filePath?: string) => {
@@ -165,34 +143,135 @@ export const FileExplorer = ({
   };
 
   const handleCreateFile = (isFolder: boolean = false) => {
-    try {
-      const fileName = prompt(`Enter new ${isFolder ? 'folder' : 'file'} name:`);
-      if (fileName && onCreateFile) {
-        // Create file in current folder context
-        const fullPath = currentFolder ? `${currentFolder}/${fileName}` : fileName;
-        onCreateFile(fullPath, isFolder);
-      }
-    } catch (error) {
-      console.error('Error in handleCreateFile:', error);
-    }
+    setModal({
+      show: true,
+      type: 'create',
+      title: `Create New ${isFolder ? 'Folder' : 'File'}`,
+      message: `Enter the name for the new ${isFolder ? 'folder' : 'file'}:`,
+      inputValue: '',
+      inputPlaceholder: isFolder ? 'folder-name' : 'filename.ext',
+      isFolder
+    });
   };
 
   const handleDeleteFile = (filePath: string) => {
-    try {
-      if (confirm(`Are you sure you want to delete "${filePath}"?`)) {
-        if (onDeleteFile) {
-          onDeleteFile(filePath);
-        }
-      }
-    } catch (error) {
-      console.error('Error in handleDeleteFile:', error);
-    }
+    setModal({
+      show: true,
+      type: 'delete',
+      title: 'Confirm Delete',
+      message: `Are you sure you want to delete "${filePath}"?`,
+      inputValue: '',
+      inputPlaceholder: '',
+      isFolder: false,
+      filePath
+    });
   };
 
-  const handleRenameFile = (oldPath: string, newPath: string) => {
+  const handleModalConfirm = () => {
+    if (modal.type === 'create' && modal.inputValue.trim()) {
+      const fullPath = currentFolder ? `${currentFolder}/${modal.inputValue.trim()}` : modal.inputValue.trim();
+      if (onCreateFile) {
+        onCreateFile(fullPath, modal.isFolder);
+      }
+      // Optimistically update local state for better UX
+      const newFile: FileItem = {
+        id: modal.inputValue.trim(),
+        name: modal.inputValue.trim(),
+        type: modal.isFolder ? 'folder' : 'file',
+        path: fullPath,
+        extension: modal.isFolder ? undefined : modal.inputValue.trim().split('.').pop()
+      };
+      
+      setLocalFiles(prev => {
+        const newFiles = [...prev];
+        if (currentFolder) {
+          // Add to specific folder
+          const addToFolder = (files: FileItem[], folderPath: string): FileItem[] => {
+            return files.map(file => {
+              if (file.path === folderPath && file.type === 'folder') {
+                return {
+                  ...file,
+                  children: [...(file.children || []), newFile]
+                };
+              } else if (file.children) {
+                return {
+                  ...file,
+                  children: addToFolder(file.children, folderPath)
+                };
+              }
+              return file;
+            });
+          };
+          return addToFolder(newFiles, currentFolder);
+        } else {
+          // Add to root
+          return [...newFiles, newFile];
+        }
+      });
+    } else if (modal.type === 'delete' && modal.filePath) {
+      console.log('Deleting file:', modal.filePath);
+      if (onDeleteFile) {
+        onDeleteFile(modal.filePath);
+      }
+      // Optimistically remove from local state
+      setLocalFiles(prev => {
+        const removeFile = (files: FileItem[], path: string): FileItem[] => {
+          return files.filter(file => {
+            if (file.path === path) {
+              console.log('Removing file from local state:', path);
+              return false;
+            } else if (file.children) {
+              file.children = removeFile(file.children, path);
+            }
+            return true;
+          });
+        };
+        return removeFile(prev, modal.filePath!);
+      });
+    }
+    setModal({ show: false, type: null, title: '', message: '', inputValue: '', inputPlaceholder: '', isFolder: false });
+  };
+
+  const handleModalCancel = () => {
+    setModal({ show: false, type: null, title: '', message: '', inputValue: '', inputPlaceholder: '', isFolder: false });
+  };
+
+  const handleRenameFile = (oldPath: string, newName: string) => {
+    // Construct the new path properly
+    const oldPathParts = oldPath.split('/');
+    const newPathParts = [...oldPathParts.slice(0, -1), newName];
+    const newPath = newPathParts.join('/');
+    
+    console.log('Renaming file:', { oldPath, newName, newPath });
+    
     if (onRenameFile) {
       onRenameFile(oldPath, newPath);
     }
+    
+    // Optimistically update local state
+    setLocalFiles(prev => {
+      const renameFile = (files: FileItem[], oldPath: string, newPath: string): FileItem[] => {
+        return files.map(file => {
+          if (file.path === oldPath) {
+            return {
+              ...file,
+              id: newName,
+              name: newName,
+              path: newPath,
+              extension: file.type === 'file' ? newName.split('.').pop() : file.extension
+            };
+          } else if (file.children) {
+            return {
+              ...file,
+              children: renameFile(file.children, oldPath, newPath)
+            };
+          }
+          return file;
+        });
+      };
+      return renameFile(prev, oldPath, newPath);
+    });
+    
     setRenamingFile(null);
     setNewFileName('');
   };
@@ -265,7 +344,7 @@ export const FileExplorer = ({
             </>
           ) : (
             <span className="ml-4 mr-2">
-              {getIconForFile(item.extension)}
+              {getIconForFile(item.name, item.extension)}
             </span>
           )}
           {isRenaming ? (
@@ -304,7 +383,7 @@ export const FileExplorer = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-800/95">
+    <div className="h-full flex flex-col bg-gray-800/95 relative">
       <div className="flex items-center justify-between p-2 border-b border-gray-700">
         <div className="flex flex-col">
           <div className="text-sm font-medium text-gray-300">Files</div>
@@ -366,7 +445,7 @@ export const FileExplorer = ({
           }
         }}
       >
-        {Array.isArray(files) ? sortFileItems(files).map(file => renderFileItem(file)) : <div className="p-2 text-gray-500 text-sm">No files available</div>}
+        {Array.isArray(localFiles) ? sortFileItems(localFiles).map(file => renderFileItem(file)) : <div className="p-2 text-gray-500 text-sm">No files available</div>}
       </div>
       
       {/* Custom Context Menu */}
@@ -420,6 +499,50 @@ export const FileExplorer = ({
             }}
           >
             Delete
+          </div>
+        </div>
+      )}
+
+      {/* Custom Modal */}
+      {modal.show && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-white mb-2">{modal.title}</h3>
+            <p className="text-gray-300 mb-4">{modal.message}</p>
+            
+            {modal.type === 'create' && (
+              <input
+                type="text"
+                value={modal.inputValue}
+                onChange={(e) => setModal(prev => ({ ...prev, inputValue: e.target.value }))}
+                placeholder={modal.inputPlaceholder}
+                className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded mb-4 focus:outline-none focus:border-blue-500"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleModalConfirm();
+                  } else if (e.key === 'Escape') {
+                    handleModalCancel();
+                  }
+                }}
+              />
+            )}
+            
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleModalCancel}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleModalConfirm}
+                className={`${modal.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+              >
+                {modal.type === 'delete' ? 'Delete' : 'Create'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

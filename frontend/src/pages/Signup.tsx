@@ -41,7 +41,7 @@ const Signup = () => {
               <div className="w-10 h-10 bg-gradient-to-r from-codevo-blue to-codevo-cyan rounded-md flex items-center justify-center glow">
                 <span className="text-white font-bold text-lg">&lt;/&gt;</span>
               </div>
-              <span className="ml-2 text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
+              <span className="ml-2 text-2xl font-bold bg-clip-text bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
                 Codevo
               </span>
             </Link>

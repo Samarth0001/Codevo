@@ -1,8 +1,10 @@
 
 import React from "react";
 import Button from "@/components/ui/button-custom";
+import { useNavigate } from "react-router-dom";
 
 const CTA: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <section className="py-20 bg-dark-card relative overflow-hidden">
       <div className="absolute -z-10 w-full h-full">
@@ -23,6 +25,7 @@ const CTA: React.FC = () => {
             <Button 
               variant="default"
               className="text-lg py-6 px-8 shadow-md shadow-blue-500/20"
+              onClick={() => navigate("/signup")}
             >
               Get Started for Free
             </Button>

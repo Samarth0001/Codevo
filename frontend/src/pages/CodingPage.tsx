@@ -224,7 +224,7 @@ const CodingPagePostPodCreation = () => {
     // swiftrocket6632-aa3a8b10-5660-42fd-8ee5-3a8dd9866067.codevo.dev
     // https://${projectId}.codevo.dev
     // const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`);
-    const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`, {
+    const runnerSocket = io(`http://${projectId}.codevo.live`, {
       path: "/user/socket.io",
       timeout: 10000, // 10 second timeout
       reconnection: true,
@@ -672,10 +672,18 @@ const CodingPagePostPodCreation = () => {
         projectName={location.state?.projectName}
       />
 
-      {/* Connection Status */}
-      {!isConnected && (
-        <div className="bg-yellow-600 text-white px-4 py-2 text-center">
-          Connecting...
+      {/* Full-screen loading overlay */}
+      {(!isConnected || fileStructure.length === 0) && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-white text-lg font-medium">
+              {!isConnected ? 'Connecting to project...' : 'Loading project files...'}
+            </p>
+            <p className="text-gray-400 text-sm mt-2">
+              Please wait while we set up your development environment
+            </p>
+          </div>
         </div>
       )}
 

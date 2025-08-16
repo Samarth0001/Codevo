@@ -314,11 +314,11 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="flex items-center px-4 py-1 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700">
-        <div className="flex space-x-1.5">
+        {/* <div className="flex space-x-1.5">
           <div className="w-3 h-3 bg-red-500 rounded-full"></div>
           <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        </div>
+        </div> */}
         <div className="ml-4 text-sm font-medium text-gray-300">
           {activeFile || 'No file selected'}
         </div>

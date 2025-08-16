@@ -37,13 +37,13 @@ export const Preview = ({ fileContents, activeFile }: PreviewProps) => {
     
          try {
        // Make request to /preview endpoint to start/restart the server
-       const response = await fetch(`http://${projectId}.127.0.0.1.sslip.io/preview`, {
+       const response = await fetch(`http://${projectId}.codevo.live/preview`, {
          method: 'GET',
          mode: 'no-cors' // Handle CORS
        });
        
        // Set the direct URL for the iframe (using the root path which routes to port 3001)
-       const directUrl = `http://${projectId}.127.0.0.1.sslip.io/`;
+       const directUrl = `http://${projectId}.codevo.live/`;
        setPreviewUrl(directUrl);
       
       // Reload iframe

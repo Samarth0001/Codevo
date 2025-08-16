@@ -18,7 +18,7 @@ const Navbar = () => {
             <div className="w-8 h-8 bg-gradient-to-r from-codevo-blue to-codevo-cyan rounded-md flex items-center justify-center glow">
               <span className="text-white font-bold text-lg">&lt;/&gt;</span>
             </div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
+            <span className="text-xl font-bold bg-clip-text bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
               Codevo
             </span>
           </Link>
@@ -35,9 +35,9 @@ const Navbar = () => {
           <a href="#testimonials" className="text-gray-300 hover:text-codevo-blue transition-colors">
             Testimonials
           </a>
-          <a href="#pricing" className="text-gray-300 hover:text-codevo-blue transition-colors">
+          {/* <a href="#pricing" className="text-gray-300 hover:text-codevo-blue transition-colors">
             Pricing
-          </a>
+          </a> */}
         </div>
 
         <div className="hidden md:flex items-center space-x-4">
@@ -89,13 +89,13 @@ const Navbar = () => {
             >
               Testimonials
             </a>
-            <a 
+            {/* <a 
               href="#pricing" 
               className="p-2 text-gray-300 hover:text-codevo-blue hover:bg-dark-accent/30 rounded-md transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
-            </a>
+            </a> */}
             <div className="flex flex-col space-y-2 pt-2 border-t border-dark-border">
               <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="outline" className="border-dark-border text-white hover:bg-dark-accent/50 hover:border-codevo-blue transition-colors w-full">

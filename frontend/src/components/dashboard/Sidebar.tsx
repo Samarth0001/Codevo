@@ -6,6 +6,17 @@ import Button from "@/components/ui/button-custom";
 import { logout } from "@/services/operations/AuthAPI";
 import { AuthContext } from "@/context/AuthContext";
 import { FaPlus } from "react-icons/fa";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type NavItem = {
   name: string;
@@ -52,7 +63,7 @@ const Sidebar = () => {
               <span className="text-white font-bold text-lg">&lt;/&gt;</span>
             </div>
             {!collapsed && (
-              <span className="ml-2 text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
+              <span className="ml-2 text-lg font-bold bg-clip-text bg-gradient-to-r from-codevo-blue to-codevo-cyan glow-text">
                 Codevo
               </span>
             )}
@@ -122,15 +133,38 @@ const Sidebar = () => {
         </div>
         
         <div className="px-2 py-4 border-t border-dark-border">
-          <Button 
-            variant="outline"
-            className={`w-full flex items-center justify-${
-              collapsed ? "center" : "start"
-            } text-sm`}
-          >
-            <LogIn size={18} />
-            {!collapsed && <span className="ml-2" onClick={() => logout(setUser,setLoggedIn,setLoading,navigate)}>Log Out</span>}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="outline"
+                className={`w-full flex items-center justify-${
+                  collapsed ? "center" : "start"
+                } text-sm`}
+              >
+                <LogIn size={18} />
+                {!collapsed && <span className="ml-2">Log Out</span>}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-dark-card border-dark-border">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-white">Confirm Logout</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-300">
+                  Are you sure you want to logout? You will be redirected to the homepage.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-dark-border text-white hover:border-blue-500 hover:bg-dark-accent/50">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={() => logout(setUser, setLoggedIn, setLoading, navigate)}
+                >
+                  Logout
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           
           <div className={`mt-4 flex items-center ${collapsed ? "justify-center" : ""}`}>
             <div className="w-8 h-8 rounded-full bg-codevo-blue flex items-center justify-center text-white font-medium">
