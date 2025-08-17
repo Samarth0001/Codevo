@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      containers:
+        - name: server
+          image: extremecoder01/server   #change here
+          ports:
+            - containerPort: 4000 # or your server port
+          envFrom:
+            - secretRef:
+                name: server-credentials # if you use secrets for env vars
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  type: ClusterIP
+  selector:
+    app: server
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000

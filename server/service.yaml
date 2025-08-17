@@ -69,7 +69,7 @@ spec:
             - name: BACKEND_URL
               value: "http://server:4000/api/v1"
             - name: DOMAIN
-              value: "127.0.0.1.sslip.io"
+              value: "codevo.live"
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
@@ -136,7 +136,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: service_name.127.0.0.1.sslip.io     # change here
+  - host: service_name.codevo.live     # change here
     http:
       paths:
       - path: /user/socket.io

@@ -23,10 +23,10 @@ app.use(cookieParser());
 
 app.use(
     cors({
-        origin:[
-          'http://localhost:5173',
-          'http://server.127.0.0.1.sslip.io:5173'
-        ],     
+        origin: [
+          'http://codevo.live',
+          'https://codevo.live',
+        ],
         credentials: true       
     })
 );
