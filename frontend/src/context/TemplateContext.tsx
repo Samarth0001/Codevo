@@ -51,7 +51,7 @@ export const TemplateProvider: React.FC<TemplateProviderProps> = ({ children }) 
         setError(response?.message || 'Failed to fetch templates');
       }
     } catch (err: any) {
-      console.error('Error fetching templates:', err);
+      // console.error('Error fetching templates:', err);
       setError(err.response?.data?.message || 'Failed to fetch templates');
     } finally {
       setLoading(false);

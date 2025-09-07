@@ -19,7 +19,7 @@ export const CollaborationStatus: React.FC = () => {
 
   return (
     <TooltipProvider>
-      <div className="flex items-center space-x-2 px-3 py-1">
+      <div className="flex items-center space-x-2 px-3 py-1 relative">
         <div className="flex items-center space-x-1">
           <Wifi className="h-4 w-4 text-green-500" />
           <span className="text-sm text-green-600 font-medium">
@@ -33,9 +33,9 @@ export const CollaborationStatus: React.FC = () => {
             {activeUsers.slice(0, 3).map((user, index) => (
               <Tooltip key={user.userId}>
                 <TooltipTrigger>
-                  <Avatar className="h-6 w-6 border-2 border-white">
+                  <Avatar className="h-6 w-6 border-2 border-white ">
                     <AvatarFallback 
-                      className="text-xs font-medium"
+                      className="text-xs font-medium absolute"
                       style={{ backgroundColor: user.color, color: 'white' }}
                     >
                       {user.username.charAt(0).toUpperCase()}
@@ -43,7 +43,7 @@ export const CollaborationStatus: React.FC = () => {
                   </Avatar>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="text-center">
+                  <div className="text-center absolute -bottom-20 -left-1/2">
                     <p className="font-medium">{user.username}</p>
                     {user.activeFile && (
                       <p className="text-xs text-gray-500">

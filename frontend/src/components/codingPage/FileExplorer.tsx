@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Folder, Search, Plus, FolderPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Search, Plus, FolderPlus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileIcon } from './FileIcons';
+import { useCollaboration } from '@/context/CollaborationContext';
 
 interface FileItem {
   id: string;
@@ -18,6 +19,7 @@ interface FileExplorerProps {
   onDeleteFile?: (path: string) => void;
   onRenameFile?: (oldPath: string, newPath: string) => void;
   onGetFileContent?: (path: string) => void;
+  onRefreshStructure?: () => void;
   isConnected?: boolean;
 }
 
@@ -61,6 +63,7 @@ export const FileExplorer = ({
   onDeleteFile, 
   onRenameFile, 
   onGetFileContent,
+  onRefreshStructure,
   isConnected = true 
 }: FileExplorerProps) => {
   // Use the files prop from parent component instead of local state
@@ -103,6 +106,7 @@ export const FileExplorer = ({
   });
   
   const {activeFile, setActiveFile} = useEditor();
+  const { userRole } = useCollaboration();
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -209,7 +213,7 @@ export const FileExplorer = ({
         }
       });
     } else if (modal.type === 'delete' && modal.filePath) {
-      console.log('Deleting file:', modal.filePath);
+      // console.log('Deleting file:', modal.filePath);
       if (onDeleteFile) {
         onDeleteFile(modal.filePath);
       }
@@ -218,7 +222,7 @@ export const FileExplorer = ({
         const removeFile = (files: FileItem[], path: string): FileItem[] => {
           return files.filter(file => {
             if (file.path === path) {
-              console.log('Removing file from local state:', path);
+              // console.log('Removing file from local state:', path);
               return false;
             } else if (file.children) {
               file.children = removeFile(file.children, path);
@@ -242,7 +246,7 @@ export const FileExplorer = ({
     const newPathParts = [...oldPathParts.slice(0, -1), newName];
     const newPath = newPathParts.join('/');
     
-    console.log('Renaming file:', { oldPath, newName, newPath });
+    // console.log('Renaming file:', { oldPath, newName, newPath });
     
     if (onRenameFile) {
       onRenameFile(oldPath, newPath);
@@ -397,7 +401,7 @@ export const FileExplorer = ({
             size="icon" 
             className="h-7 w-7 hover:bg-gray-700"
             onClick={() => handleCreateFile(false)}
-            disabled={!isConnected}
+            disabled={!isConnected || userRole === 'reader'}
             title={currentFolder ? `Create file in ${currentFolder}` : "Create file in root directory"}
           >
             <Plus size={14} className="text-gray-300" />
@@ -407,10 +411,24 @@ export const FileExplorer = ({
             size="icon" 
             className="h-7 w-7 hover:bg-gray-700"
             onClick={() => handleCreateFile(true)}
-            disabled={!isConnected}
+            disabled={!isConnected || userRole === 'reader'}
             title={currentFolder ? `Create folder in ${currentFolder}` : "Create folder in root directory"}
           >
             <FolderPlus size={14} className="text-gray-300" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 hover:bg-gray-700"
+            onClick={() => {
+              if (onRefreshStructure) {
+                onRefreshStructure();
+              }
+            }}
+            disabled={!isConnected}
+            title="Refresh file structure"
+          >
+            <RefreshCw size={14} className="text-gray-300" />
           </Button>
         </div>
       </div>
@@ -458,48 +476,57 @@ export const FileExplorer = ({
             minWidth: '200px'
           }}
         >
-          <div 
-            className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
-            onClick={() => {
-              handleCreateFile(false);
-              setContextMenu({ show: false, x: 0, y: 0, item: null });
-            }}
-          >
-            New File {currentFolder ? `in ${currentFolder}` : 'in root'}
-          </div>
-          <div 
-            className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
-            onClick={() => {
-              handleCreateFile(true);
-              setContextMenu({ show: false, x: 0, y: 0, item: null });
-            }}
-          >
-            New Folder {currentFolder ? `in ${currentFolder}` : 'in root'}
-          </div>
-          {contextMenu.item?.type === 'file' && (
-            <div 
-              className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
-              onClick={() => {
-                if (contextMenu.item?.path) {
-                  startRename(contextMenu.item.path, contextMenu.item.name);
-                }
-                setContextMenu({ show: false, x: 0, y: 0, item: null });
-              }}
-            >
-              Rename
+          {userRole !== 'reader' && (
+            <>
+              <div 
+                className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+                onClick={() => {
+                  handleCreateFile(false);
+                  setContextMenu({ show: false, x: 0, y: 0, item: null });
+                }}
+              >
+                New File {currentFolder ? `in ${currentFolder}` : 'in root'}
+              </div>
+              <div 
+                className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+                onClick={() => {
+                  handleCreateFile(true);
+                  setContextMenu({ show: false, x: 0, y: 0, item: null });
+                }}
+              >
+                New Folder {currentFolder ? `in ${currentFolder}` : 'in root'}
+              </div>
+              {contextMenu.item?.type === 'file' && (
+                <div 
+                  className="px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700"
+                  onClick={() => {
+                    if (contextMenu.item?.path) {
+                      startRename(contextMenu.item.path, contextMenu.item.name);
+                    }
+                    setContextMenu({ show: false, x: 0, y: 0, item: null });
+                  }}
+                >
+                  Rename
+                </div>
+              )}
+              <div 
+                className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-red-400"
+                onClick={() => {
+                  if (contextMenu.item?.path) {
+                    handleDeleteFile(contextMenu.item.path);
+                  }
+                  setContextMenu({ show: false, x: 0, y: 0, item: null });
+                }}
+              >
+                Delete
+              </div>
+            </>
+          )}
+          {userRole === 'reader' && (
+            <div className="px-3 py-2 text-gray-400 cursor-not-allowed">
+              File operations disabled for readers
             </div>
           )}
-          <div 
-            className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-red-400"
-            onClick={() => {
-              if (contextMenu.item?.path) {
-                handleDeleteFile(contextMenu.item.path);
-              }
-              setContextMenu({ show: false, x: 0, y: 0, item: null });
-            }}
-          >
-            Delete
-          </div>
         </div>
       )}
 

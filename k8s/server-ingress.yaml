@@ -1,27 +1,32 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: server-ingress
-  annotations:
-    # kubernetes.io/ingress.class: "gce"            # Use GKE-managed ingress
-    # kubernetes.io/ingress.allow-http: "true"
-    # kubernetes.io/ingress.allow-https: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: / 
-    nginx.ingress.kubernetes.io/ssl-redirect: "false" 
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*" 
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS" 
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization" 
-    nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length,Content-Range"
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: server.codevo.live  # Change this to your domain
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: server
-                port:
-                  number: 4000
+  name: poddeployment-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: poddeployment-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: poddeployment-rolebinding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: poddeployment-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: poddeployment-role
+  apiGroup: rbac.authorization.k8s.io

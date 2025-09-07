@@ -1,6 +1,7 @@
 
 import Button from "@/components/ui/button-custom";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const steps = [
   {
@@ -29,15 +30,23 @@ const steps = [
   },
   {
     number: "05",
-    title: "Deploy & Share",
+    title: "Connect to Github & Get Version Control",
     description: "Deploy your application with a single click. Share your projects with custom URLs.",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+    videoUrl: "https://res.cloudinary.com/dyk6yrjqz/video/upload/v1756630671/Git-video_ocisky.mp4"
+  },
+  {
+    number: "06",
+    title: "AI-Powered Code Assistant",
+    description: "Get instant code generation, explanations, and learning support. Ask questions, get code suggestions, and understand complex concepts with our intelligent AI chatbot.",
+    videoUrl: "https://res.cloudinary.com/dyk6yrjqz/video/upload/v1757165529/Ai-chatbot-video_qvdevw.mp4"
   }
 ];
 
 const HowItWorks = () => {
   const [visibleVideos, setVisibleVideos] = useState<number[]>([]);
   const videoRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const navigate = useNavigate();
+
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -111,7 +120,7 @@ const HowItWorks = () => {
                         preload="metadata"
                         poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239CA3AF' font-family='Arial' font-size='16'%3ELoading Video...%3C/text%3E%3C/svg%3E"
                       onError={(e) => {
-                        console.error(`Video failed to load: ${step.videoUrl}`, e);
+                        // console.error(`Video failed to load: ${step.videoUrl}`, e);
                         const videoElement = e.target as HTMLVideoElement;
                         const container = videoElement.parentElement;
                         if (container) {
@@ -126,10 +135,10 @@ const HowItWorks = () => {
                         }
                       }}
                       onLoadStart={() => {
-                        console.log(`Video loading started: ${step.videoUrl}`);
+                        // console.log(`Video loading started: ${step.videoUrl}`);
                       }}
                       onCanPlay={() => {
-                        console.log(`Video can play: ${step.videoUrl}`);
+                        // console.log(`Video can play: ${step.videoUrl}`);
                       }}
                     >
                       Your browser does not support the video tag.
@@ -149,7 +158,9 @@ const HowItWorks = () => {
         </div>
         
         <div className="mt-20 text-center">
-          <Button className="bg-gradient-to-r from-codevo-blue to-codevo-purple hover:from-codevo-purple hover:to-codevo-blue text-white transition-all duration-300 text-lg py-6 px-8 glow">
+          <Button className="bg-gradient-to-r from-codevo-blue to-codevo-purple hover:from-codevo-purple hover:to-codevo-blue text-white transition-all duration-300 text-lg py-6 px-8 glow"
+          onClick={() => navigate("/signup")}
+          >
             Start Building Now
           </Button>
         </div>

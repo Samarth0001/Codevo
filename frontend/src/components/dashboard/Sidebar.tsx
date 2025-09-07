@@ -29,11 +29,12 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [navigation, setNavigation] = useState<NavItem[]>([
     { name: "Home", icon: <LayoutDashboard size={20} />, href: "/dashboard/home", current: false },
-    { name: "Projects", icon: <Grid size={20} />, href: "/dashboard/viewProjects", current: false },
+    { name: "My Projects", icon: <Grid size={20} />, href: "/dashboard/viewProjects", current: false },
+    { name: "Shared with me", icon: <Grid size={20} />, href: "/dashboard/sharedProjects", current: false },
+    { name: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", current: false },
     // { name: "Analytics", icon: <BarChart size={20} />, href: "/dashboard/analytics", current: false },
     // { name: "Calendar", icon: <Calendar size={20} />, href: "/dashboard/calendar", current: false },
     // { name: "Messages", icon: <MessageSquare size={20} />, href: "/dashboard/messages", current: false },
-    // { name: "Settings", icon: <Settings size={20} />, href: "/dashboard/settings", current: false },
   ]);
 
   const handleNavClick = (index: number) => {

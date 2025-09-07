@@ -3,6 +3,7 @@ import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/button-custom";
 import { AuthContext } from "@/context/AuthContext";
+import { Users } from "lucide-react";
 
 interface ProjectCardProps {
   id: string;
@@ -11,8 +12,7 @@ interface ProjectCardProps {
   language: string;
   lastUpdated: string;
   lastUpdatedBy: string;
-  stars: number;
-  forks: number;
+  forks?: number;
   projectId?: string;
   templateId?: string;
   visibility?: string;
@@ -26,8 +26,7 @@ const ProjectCard = ({
   language,
   lastUpdated,
   lastUpdatedBy,
-  stars,
-  forks,
+  forks = 0,
   projectId,
   templateId,
   visibility,
@@ -39,6 +38,20 @@ const ProjectCard = ({
 
   const toggleStar = () => {
     setIsStarred(!isStarred);
+  };
+
+  // Get language color
+  const getLanguageColor = (language: string) => {
+    switch (language) {
+      case 'JavaScript': return 'bg-yellow-400';
+      case 'TypeScript': return 'bg-blue-500';
+      case 'Python': return 'bg-green-500';
+      case 'HTML': return 'bg-red-500';
+      case 'CSS': return 'bg-purple-500';
+      case 'React Javascript': return 'bg-cyan-400';
+      case 'Node.js': return 'bg-green-600';
+      default: return 'bg-gray-500';
+    }
   };
 
   return (
@@ -69,25 +82,18 @@ const ProjectCard = ({
         <div className="flex items-center space-x-3">
           <div className="flex items-center">
             <div 
-              className={`h-3 w-3 rounded-full mr-1
-                ${language === "JavaScript" ? "bg-yellow-400" : 
-                  language === "TypeScript" ? "bg-blue-500" : 
-                  language === "Python" ? "bg-green-500" : 
-                  language === "HTML" ? "bg-red-500" : 
-                  language === "CSS" ? "bg-purple-500" : "bg-gray-500"}`}
+              className={`h-3 w-3 rounded-full mr-1 ${getLanguageColor(language)}`}
             ></div>
             <span className="text-xs text-gray-400">{language}</span>
           </div>
-          <div className="flex items-center text-xs text-gray-400">
+          {/* <div className="flex items-center text-xs text-gray-400">
             <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             <span>{stars}</span>
-          </div>
-          <div className="flex items-center text-xs text-gray-400">
-            <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
+          </div> */}
+          <div className="flex items-center text-xs text-gray-400 gap-1">
+            <Users className="h-4 w-4" />
             <span>{forks}</span>
           </div>
         </div>

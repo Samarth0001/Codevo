@@ -7,8 +7,6 @@ import { login } from "@/services/operations/AuthAPI";
 import { AuthContext } from "@/context/AuthContext";
 import Spinner from "@/components/auth/Spinner";
 
-
-
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -133,7 +131,7 @@ const Login = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-codevo-blue hover:text-blue-500">
+                <a className="font-medium text-codevo-blue hover:text-blue-500 cursor-pointer" onClick={() => navigate('/forgot-password')}>
                   Forgot your password?
                 </a>
               </div>

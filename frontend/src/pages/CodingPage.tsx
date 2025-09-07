@@ -6,6 +6,8 @@ import { ActionSidebar } from "@/components/codingPage/ActionSidebar";
 import { CodeEditorPanel } from "@/components/codingPage/CodeEditorPanel";
 import { Shell } from "@/components/codingPage/Shell";
 import { Console } from "@/components/codingPage/Console";
+import UnifiedVersionControl from "@/components/codingPage/UnifiedVersionControl";
+import AIPanel from "@/components/codingPage/AIPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, X } from "lucide-react";
@@ -17,13 +19,15 @@ import {
 import { useEditor } from "@/context/EditorContext";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { createProject, getProjectDetails, joinProject, checkProjectStatus } from "@/services/operations/ProjectAPI";
+import { GitHubAPI } from "@/services/operations/GitHubAPI";
 import Spinner from "@/components/auth/Spinner";
 import { io, Socket } from "socket.io-client";
 import { CollaborationProvider } from "@/context/CollaborationContext";
 import { useContext } from "react";
 import { AuthContext } from "@/context/AuthContext";
+import { getUserRoleInProject, getPermissionsForRole } from "@/utils/permissions";
 
-type TabType = 'preview' | 'shell' | 'console';
+type TabType = 'preview' | 'shell' | 'console' | 'vcs' | 'ai';
 
 interface FileItem { 
   id: string;
@@ -50,15 +54,15 @@ const CodingPage = () => {
     tags
   } = location.state || {};
 
-  console.log('CodingPage - location.state:', location.state);
-  console.log('CodingPage - extracted values:', {
-    projectName,
-    description,
-    templateId,
-    userId,
-    visibility,
-    tags
-  });
+  // console.log('CodingPage - location.state:', location.state);
+  // console.log('CodingPage - extracted values:', {
+  //   projectName,
+  //   description,
+  //   templateId,
+  //   userId,
+  //   visibility,
+  //   tags
+  // });
 
   async function createProjectFn(){
     try{
@@ -72,10 +76,10 @@ const CodingPage = () => {
         visibility,
         tags
       };
-      console.log('CodingPage - calling createProject with:', projectData);
+      // console.log('CodingPage - calling createProject with:', projectData);
       
       const projectDetails = await createProject(projectData, setLoading);
-      console.log("Project created successfully", projectDetails);
+      // console.log("Project created successfully", projectDetails);
       
       // Refresh user data to get updated projects list
       await refreshUser();
@@ -83,7 +87,7 @@ const CodingPage = () => {
       setLoading(false);
     }
     catch(e){
-      console.log("Error creating project:", e);
+      // console.log("Error creating project:", e);
       setLoading(false);
     }
   }
@@ -91,11 +95,11 @@ const CodingPage = () => {
   async function joinExistingProject() {
     try {
       setLoading(true);
-      console.log('CodingPage - fetching project details for:', projectId);
+      // console.log('CodingPage - fetching project details for:', projectId);
       
       // Fetch project details from backend
       const projectDetails = await getProjectDetails(projectId);
-      console.log('CodingPage - project details fetched:', projectDetails);
+      // console.log('CodingPage - project details fetched:', projectDetails);
       
       if (!projectDetails.success) {
         // Project doesn't exist in database, redirect to dashboard
@@ -106,16 +110,16 @@ const CodingPage = () => {
       
       // Check if project is active using Redis (much faster than WebSocket test)
       const projectStatus = await checkProjectStatus(projectId);
-      console.log('CodingPage - project status:', projectStatus);
+      // console.log('CodingPage - project status:', projectStatus);
       
       if (projectStatus.isActive) {
         // Project is active, just join
-        console.log('CodingPage - Project is active, joining...');
+        // console.log('CodingPage - Project is active, joining...');
         const joinResult = await joinProject(projectId, user?._id);
-        console.log('CodingPage - joined project:', joinResult);
+        // console.log('CodingPage - joined project:', joinResult);
       } else {
         // Project exists but is not active, create Kubernetes resources
-        console.log('CodingPage - Project exists but not active, creating resources...');
+        // console.log('CodingPage - Project exists but not active, creating resources...');
         
         try {
           // Create Kubernetes resources for existing project
@@ -129,12 +133,12 @@ const CodingPage = () => {
             tags: projectDetails.project.tags || []
           }, setLoading);
           
-          console.log('CodingPage - created resources for existing project:', createResult);
+          // console.log('CodingPage - created resources for existing project:', createResult);
           
           // Refresh user data to get updated projects
           await refreshUser();
         } catch (createError) {
-          console.error('Error creating resources for existing project:', createError);
+          // console.error('Error creating resources for existing project:', createError);
           alert('Failed to activate project. Please try again.');
           navigate('/dashboard');
           return;
@@ -143,7 +147,7 @@ const CodingPage = () => {
       
       setLoading(false);
     } catch (error) {
-      console.error('Error joining project:', error);
+      // console.error('Error joining project:', error);
       alert('Failed to join project. Please try again.');
       navigate('/dashboard');
       setLoading(false);
@@ -151,7 +155,7 @@ const CodingPage = () => {
   }
 
   useEffect(() => {
-    console.log('CodingPage - useEffect triggered with:', { projectId, user: user?._id, projectName, templateId, userId });
+    // console.log('CodingPage - useEffect triggered with:', { projectId, user: user?._id, projectName, templateId, userId });
     
     if (!projectId) {
       alert('No project ID provided.');
@@ -159,10 +163,10 @@ const CodingPage = () => {
       return;
     }
 
-    console.log('CodingPage - user:', user);
+    // console.log('CodingPage - user:', user);
     // Wait for user data to be loaded
     if (!user) {
-      console.log('CodingPage - User data not loaded yet, waiting...');
+      // console.log('CodingPage - User data not loaded yet, waiting...');
       return;
     }
 
@@ -174,12 +178,12 @@ const CodingPage = () => {
 
     // If we have location.state, it's a new project creation
     if (projectName && templateId && userId) {
-      console.log('CodingPage - Creating new project');
+      // console.log('CodingPage - Creating new project');
       setLoading(true);
       createProjectFn();
     } else {
       // No location.state means joining existing project
-      console.log('CodingPage - Joining existing project');
+      // console.log('CodingPage - Joining existing project');
       joinExistingProject();
     }
     // Remove this setLoading(false) as it's handled in the individual functions
@@ -207,41 +211,64 @@ const CodingPagePostPodCreation = () => {
   const [fileStructure, setFileStructure] = useState<FileItem[]>([]);
   const [fileContents, setFileContents] = useState<Map<string, string>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
+  const [isGitHubConnected, setIsGitHubConnected] = useState(false);
+  const [showGitHubSetup, setShowGitHubSetup] = useState(false);
   const { projectId } = useParams();
   const location = useLocation();
   const { activeFile, setActiveFile, openFiles, setOpenFiles } = useEditor();
   const { user } = useContext(AuthContext);
 
+  // Get user's role and permissions for this project
+  const userRole = getUserRoleInProject(user, projectId || '');
+  const permissions = userRole ? getPermissionsForRole(userRole) : null;
+
+  // Check GitHub connection status
+  const checkGitHubStatus = async () => {
+    try {
+      const response = await GitHubAPI.getStatus();
+      setIsGitHubConnected(response.success && response.isConnected);
+    } catch (error) {
+      // console.error('Error checking GitHub status:', error);
+      setIsGitHubConnected(false);
+    }
+  };
+
+  // Check GitHub status on component mount
+  useEffect(() => {
+    if (user) {
+      checkGitHubStatus();
+    }
+  }, [user]);
 
   // WebSocket connection to runner container
   useEffect(() => {
     if (!projectId) return;
 
-    console.log(`[CodingPage] Connecting to runner for project: ${projectId}`);
+    // console.log(`[CodingPage] Connecting to runner for project: ${projectId}`);
 
     // Connect to runner container WebSocket 
     // The URL should be the runner service URL in your cluster
     // swiftrocket6632-aa3a8b10-5660-42fd-8ee5-3a8dd9866067.codevo.dev
     // https://${projectId}.codevo.dev
     // const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`);
-    const runnerSocket = io(`http://${projectId}.codevo.live`, {
+    const runnerSocket = io(`https://${projectId}.codevo.live`, {     //https://${projectId}.codevo.live
       path: "/user/socket.io",
-      timeout: 10000, // 10 second timeout
+      timeout: 40000, // 40 second timeout
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 40,
     });
 
     runnerSocket.on('connect', () => {
-      console.log('Connected to runner container');
+      // console.log('Connected to runner container');
       setIsConnected(true);
       
       // Join project room first
-      console.log(`[CodingPage] Joining project room: ${projectId}`);
+      // console.log(`[CodingPage] Joining project room: ${projectId}`);
       const userInfo = {
         userId: user?._id || runnerSocket.id,
         username: user?.name || 'Anonymous'
       };
-      console.log(`[CodingPage] User info:`, userInfo);
+      // console.log(`[CodingPage] User info:`, userInfo);
       
       runnerSocket.emit('join:project', { 
         projectId,
@@ -249,22 +276,22 @@ const CodingPagePostPodCreation = () => {
       });
       
       // Initialize project - this will create default files and send structure + content
-      console.log(`[CodingPage] Emitting project:initialize for project: ${projectId}`);
+      // console.log(`[CodingPage] Emitting project:initialize for project: ${projectId}`);
       runnerSocket.emit('project:initialize', { projectId });
     });
 
     runnerSocket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
+      // console.error('Socket connection error:', err.message);
     });
 
     runnerSocket.on('disconnect', () => {
-      console.log('Disconnected from runner container');
+      // console.log('Disconnected from runner container');
       setIsConnected(false);
     });
 
     // Handle project initialization response
     runnerSocket.on('project:initialized', ({ structure, filesWithContent, projectId: initializedProjectId }) => {
-      console.log('Project initialized:', { structure, filesWithContent, initializedProjectId });
+      // console.log('Project initialized:', { structure, filesWithContent, initializedProjectId });
       setFileStructure(structure);
       
       // Populate file contents
@@ -276,7 +303,7 @@ const CodingPagePostPodCreation = () => {
           }
         });
         setFileContents(newFileContents);
-        console.log(`[CodingPage] Loaded ${newFileContents.size} files with content`);
+        // console.log(`[CodingPage] Loaded ${newFileContents.size} files with content`);
       }
       
       // Set open files from structure
@@ -298,59 +325,103 @@ const CodingPagePostPodCreation = () => {
                            filePaths.find(path => path.endsWith(".js")) || 
                            filePaths[0];
         setActiveFile(preferredFile);
-        console.log(`[CodingPage] Set active file to: ${preferredFile}`);
+        // console.log(`[CodingPage] Set active file to: ${preferredFile}`);
       }
     });
 
     // Handle project initialization error
     runnerSocket.on('project:error', ({ message }) => {
-      console.error('Project initialization error:', message);
+      // console.error('Project initialization error:', message);
     });
 
-    // Add timeout for project initialization
-    const initTimeout = setTimeout(() => {
-      console.log(`[CodingPage] Project initialization timeout, requesting file structure manually`);
+    // Continuous polling for project initialization (5s to 1min)
+    let initPollCount = 0;
+    const maxInitPolls = 12; // 12 polls * 5s = 60s total
+    const initPollInterval = 5000; // 5 seconds
+    
+    const initPollTimer = setInterval(() => {
+      initPollCount++;
+      // console.log(`[CodingPage] Project initialization poll ${initPollCount}/${maxInitPolls}, requesting file structure`);
       runnerSocket.emit('files:getStructure');
-    }, 10000); // 10 second timeout
+      
+      // Stop polling after 1 minute (12 polls)
+      if (initPollCount >= maxInitPolls) {
+        // console.log(`[CodingPage] Project initialization polling completed after ${maxInitPolls} attempts`);
+        clearInterval(initPollTimer);
+      }
+    }, initPollInterval);
 
-    // Clear timeout when project is initialized
+    // Clear polling when project is initialized
     runnerSocket.on('project:initialized', () => {
-      clearTimeout(initTimeout);
+      // console.log(`[CodingPage] Project initialized, stopping polling after ${initPollCount} attempts`);
+      clearInterval(initPollTimer);
+    });
+
+    // Refresh structure on direct files events from runner (create/delete/rename)
+    runnerSocket.on('files:created', () => {
+      // console.log('[CodingPage] files:created received → refreshing structure');
+      runnerSocket.emit('files:refreshStructure');
+    });
+    runnerSocket.on('files:deleted', () => {
+      // console.log('[CodingPage] files:deleted received → refreshing structure');
+      runnerSocket.emit('files:refreshStructure');
+    });
+    runnerSocket.on('files:renamed', () => {
+      // console.log('[CodingPage] files:renamed received → refreshing structure');
+      runnerSocket.emit('files:refreshStructure');
     });
 
     // Handle file structure updates
     runnerSocket.on('files:structure', (files: FileItem[]) => {
-      console.log('Received file structure:', files);
-      setFileStructure(files);
+      // console.log('Received file structure:', files);
       
-      // Update open files if not already set
-      if (openFiles.length === 0) {
-        const filePaths = files
-          .filter(item => item.type === 'file')
-          .map(item => item.path || item.name);
+      // Track the last update time
+      (window as any).lastFileStructureUpdate = Date.now();
+      
+      // Validate the file structure before updating
+      if (Array.isArray(files)) {
+        // Always set the file structure, even if empty (valid for new projects)
+        setFileStructure(files);
         
-        if (filePaths.length > 0) {
-          setOpenFiles(filePaths);
-          setActiveFile(filePaths[0]);
+        // Update open files if not already set and files exist
+        if (openFiles.length === 0 && files.length > 0) {
+          const filePaths = files
+            .filter(item => item.type === 'file')
+            .map(item => item.path || item.name);
+          
+          if (filePaths.length > 0) {
+            setOpenFiles(filePaths);
+            setActiveFile(filePaths[0]);
+          }
         }
+        
+        // console.log(`[CodingPage] File structure updated with ${files.length} items`);
+      } else {
+        // console.warn('[CodingPage] Received invalid file structure:', files);
+        // Request a fresh file structure if we received invalid data
+        setTimeout(() => {
+          if (socket && isConnected) {
+            socket.emit('files:refreshStructure');
+          }
+        }, 1000);
       }
     });
 
     // Handle file content updates
     runnerSocket.on('files:content', ({ path, content }) => {
-      console.log('Received file content for:', path);
+      // console.log('Received file content for:', path);
       setFileContents(prev => new Map(prev).set(path, content));
     });
 
     // Handle content updates from other users
     runnerSocket.on('files:contentUpdated', ({ path, content, diffType, updatedBy }) => {
-      console.log(`[CodingPage] Content updated by ${updatedBy} for: ${path}`);
+      // console.log(`[CodingPage] Content updated by ${updatedBy} for: ${path}`);
       setFileContents(prev => new Map(prev).set(path, content));
     });
 
     // Handle file creation
     runnerSocket.on('file:created', (file: FileItem & { createdBy: string; timestamp: number }) => {
-      console.log('File created:', file);
+      // console.log('File created:', file);
       setFileStructure(prev => addFileToStructure(prev, file));
       
       if (file.type === 'file') {
@@ -366,12 +437,12 @@ const CodingPagePostPodCreation = () => {
 
     // Handle file deletion
     runnerSocket.on('file:deleted', (data: { path: string; deletedBy: string; timestamp: number }) => {
-      console.log('File deleted:', data.path);
+      // console.log('File deleted:', data.path);
       
       setFileStructure(prev => {
-        console.log('Removing file from structure:', data.path);
+        // console.log('Removing file from structure:', data.path);
         const newStructure = removeFileFromStructure(prev, data.path);
-        console.log('New structure after deletion:', newStructure);
+        // console.log('New structure after deletion:', newStructure);
         return newStructure;
       });
       
@@ -388,11 +459,11 @@ const CodingPagePostPodCreation = () => {
       
       // If the deleted file was active, switch to another file
       if (activeFile === data.path) {
-        console.log(`[CodingPage] Active file "${data.path}" was deleted, switching to another file`);
+        // console.log(`[CodingPage] Active file "${data.path}" was deleted, switching to another file`);
         
         // Find another file to switch to
         const remainingFiles = newOpenFiles.filter(name => name !== data.path);
-        console.log(`[CodingPage] Remaining files after deletion:`, remainingFiles);
+        // console.log(`[CodingPage] Remaining files after deletion:`, remainingFiles);
         
         if (remainingFiles.length > 0) {
           // Prefer main.js, then index.js, then index.html, then any .js file, then first file
@@ -401,21 +472,21 @@ const CodingPagePostPodCreation = () => {
                                remainingFiles.find(name => name === "index.html") || 
                                remainingFiles.find(name => name.endsWith(".js")) || 
                                remainingFiles[0];
-          console.log(`[CodingPage] Switching to preferred file after deletion: ${preferredFile}`);
+          // console.log(`[CodingPage] Switching to preferred file after deletion: ${preferredFile}`);
           setActiveFile(preferredFile);
         } else {
           // No files left, clear active file
-          console.log('[CodingPage] No files remaining after deletion, clearing active file');
+          // console.log('[CodingPage] No files remaining after deletion, clearing active file');
           setActiveFile('');
         }
       } else {
-        console.log(`[CodingPage] Deleted file "${data.path}" was not active, no need to switch`);
+        // console.log(`[CodingPage] Deleted file "${data.path}" was not active, no need to switch`);
       }
     });
 
     // Handle file rename
     runnerSocket.on('file:renamed', (data: { oldPath: string; newPath: string; renamedBy: string; timestamp: number }) => {
-      console.log('File renamed:', data.oldPath, '->', data.newPath);
+      // console.log('File renamed:', data.oldPath, '->', data.newPath);
       setFileStructure(prev => renameFileInStructure(prev, data.oldPath, data.newPath));
       const newOpenFiles = openFiles.map(name => name === data.oldPath ? data.newPath : name);
       setOpenFiles(newOpenFiles);
@@ -439,16 +510,16 @@ const CodingPagePostPodCreation = () => {
 
     // Handle Yjs files
     runnerSocket.on('yjs:files', (files: string[]) => {
-      console.log('Received Yjs files:', files);
+      // console.log('Received Yjs files:', files);
       // This will be used to sync with the editor
     });
 
     // Handle file structure changes from terminal operations
     runnerSocket.on('files:structureChanged', (data: { event: string; path: string; timestamp: number }) => {
       // Only log important events, not node_modules changes
-      if (data.event === 'force-refresh' || !data.path.includes('node_modules')) {
-        console.log('[CodingPage] File structure changed:', data);
-      }
+      // if (data.event === 'force-refresh' || !data.path.includes('node_modules')) {
+      //   console.log('[CodingPage] File structure changed:', data);
+      // }
       
       // Refresh the file structure when changes are detected
       if (socket && isConnected) {
@@ -457,12 +528,25 @@ const CodingPagePostPodCreation = () => {
       
       // Special handling for force refresh events
       if (data.event === 'force-refresh') {
-        console.log('[CodingPage] Force refresh detected, requesting fresh file structure');
+        // console.log('[CodingPage] Force refresh detected, requesting fresh file structure');
+        // Multiple refresh attempts with increasing delays to ensure we catch all changes
         setTimeout(() => {
           if (socket && isConnected) {
             socket.emit('files:refreshStructure');
           }
-        }, 1000); // Small delay to ensure file system is ready
+        }, 500); // First attempt after 500ms
+        
+        setTimeout(() => {
+          if (socket && isConnected) {
+            socket.emit('files:refreshStructure');
+          }
+        }, 1500); // Second attempt after 1.5s
+        
+        setTimeout(() => {
+          if (socket && isConnected) {
+            socket.emit('files:refreshStructure');
+          }
+        }, 2500); // Third attempt after 2.5s
       }
     });
 
@@ -485,15 +569,31 @@ const CodingPagePostPodCreation = () => {
     };
   }, [projectId]);
 
+  // Periodic file structure refresh to catch any missed updates
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const interval = setInterval(() => {
+      // Only refresh if we haven't received a structure update recently
+      const lastUpdate = Date.now() - (window as any).lastFileStructureUpdate || 0;
+      if (lastUpdate > 30000) { // 30 seconds
+        // console.log('[CodingPage] Periodic file structure refresh');
+        socket.emit('files:refreshStructure');
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [socket, isConnected]);
+
   // Helper function to remove file from structure
   const removeFileFromStructure = (structure: FileItem[], path: string): FileItem[] => {
-    console.log('Removing file from structure:', path);
-    console.log('Current structure:', structure);
+    // console.log('Removing file from structure:', path);
+    // console.log('Current structure:', structure);
     
     return structure.filter(item => {
-      console.log('Checking item:', item.path, 'against path:', path);
+      // console.log('Checking item:', item.path, 'against path:', path);
       if (item.path === path) {
-        console.log('Found item to remove:', item.path);
+        // console.log('Found item to remove:', item.path);
         return false;
       }
       if (item.children) {
@@ -554,11 +654,11 @@ const CodingPagePostPodCreation = () => {
   };
 
   const deleteFile = (path: string) => {
-    console.log('Attempting to delete file:', path);
+    // console.log('Attempting to delete file:', path);
     if (socket && isConnected) {
       socket.emit('files:delete', { path });
     } else {
-      console.error('Cannot delete file: socket not connected');
+      // console.error('Cannot delete file: socket not connected');
     }
   };
 
@@ -575,8 +675,14 @@ const CodingPagePostPodCreation = () => {
   };
 
   const addTab = (tab: TabType) => {
+    if (tab === 'shell' && !permissions?.canAccessTerminal) {
+      return; // Don't add terminal tab for readers
+    }
+    if (tab === 'vcs' && !permissions?.canAccessVCS) {
+      return; // Don't add VCS tab for non-owners
+    }
     if (!activeTabs.includes(tab)) {
-      setActiveTabs([...activeTabs, tab]);
+      setActiveTabs(prev => [...prev, tab]);
       setSelectedTab(tab);
     } else {
       setSelectedTab(tab);
@@ -606,11 +712,11 @@ const CodingPagePostPodCreation = () => {
 
   const runCode = () => {
     if (!socket || !projectId) {
-      console.error('Cannot run code: socket or projectId not available');
+      // console.error('Cannot run code: socket or projectId not available');
       return;
     }
 
-    console.log(`[CodingPage] Executing code for project: ${projectId}`);
+    // console.log(`[CodingPage] Executing code for project: ${projectId}`);
     setIsExecuting(true);
     setExecutionResult(null);
 
@@ -628,7 +734,7 @@ const CodingPagePostPodCreation = () => {
       error: string;
       executionTime: number;
     }) => {
-      console.log('[CodingPage] Code execution result:', result);
+      // console.log('[CodingPage] Code execution result:', result);
       setIsExecuting(false);
       setExecutionResult(result);
 
@@ -658,8 +764,10 @@ const CodingPagePostPodCreation = () => {
       socket={socket} 
       userId={user?._id || socket?.id || 'anonymous'} 
       username={user?.name || 'Anonymous'}
+      role={userRole}
+      permissions={permissions}
     >
-      <div className="flex flex-col h-screen w-screen bg-gray-900 text-white overflow-hidden">
+      <div className="flex flex-col h-screen w-full bg-gray-900 text-white overflow-hidden">
       {/* Header */}
       <EditorHeader 
         isFullscreen={isFullscreen} 
@@ -673,7 +781,7 @@ const CodingPagePostPodCreation = () => {
       />
 
       {/* Full-screen loading overlay */}
-      {(!isConnected || fileStructure.length === 0) && (
+      {(!isConnected || (fileStructure.length === 0 && !(window as any).lastFileStructureUpdate)) && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -690,21 +798,28 @@ const CodingPagePostPodCreation = () => {
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Vertical action sidebar */}
-        <ActionSidebar 
+        <ActionSidebar
           showFileExplorer={showFileExplorer}
           showTerminal={activeTabs.includes('shell')}
           showPreview={activeTabs.includes('preview')}
+          showVCS={activeTabs.includes('vcs')}
+          showAI={activeTabs.includes('ai')}
           toggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
           toggleTerminal={() => addTab('shell')}
           togglePreview={() => addTab('preview')}
+          canAccessTerminal={permissions?.canAccessTerminal || false}
+          canAccessVCS={permissions?.canAccessVCS || false}
+          canEditCode={permissions?.canEditCode || false}
+          toggleVCS={() => addTab('vcs')}
+          toggleAI={() => addTab('ai')}
         />
 
         {/* Main layout */}
-        <div className="flex-1 h-full relative">
+        <div className="flex-1 h-full relative min-w-0">
           <PanelGroup direction="horizontal">
             {showFileExplorer && (
               <>
-                <Panel defaultSize={10} minSize={10} maxSize={30}>
+                <Panel defaultSize={15} minSize={10} maxSize={25}>
                   <div className="h-full relative">
                     <FileExplorer 
                       files={fileStructure}
@@ -712,6 +827,11 @@ const CodingPagePostPodCreation = () => {
                       onDeleteFile={deleteFile}
                       onRenameFile={renameFile}
                       onGetFileContent={getFileContent}
+                      onRefreshStructure={() => {
+                        if (socket && isConnected) {
+                          socket.emit('files:refreshStructure');
+                        }
+                      }}
                       isConnected={isConnected}
                     />
                     <Button
@@ -727,21 +847,23 @@ const CodingPagePostPodCreation = () => {
                 <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
               </>
             )}
-            <Panel defaultSize={showFileExplorer ? 80 : 100}>
+            <Panel defaultSize={showFileExplorer ? 85 : 100} minSize={50}>
               <PanelGroup direction="horizontal">
-                <Panel defaultSize={70} minSize={30}>
-                  <CodeEditorPanel 
-                    currentTheme={currentTheme}
-                    setCurrentTheme={setCurrentTheme}
-                    socket={socket}
-                    onFileContentChange={updateFileContent}
-                  />
+                <Panel defaultSize={60} minSize={30} maxSize={80}>
+                  <div className="h-full w-full min-w-0">
+                    <CodeEditorPanel 
+                      currentTheme={currentTheme}
+                      setCurrentTheme={setCurrentTheme}
+                      socket={socket}
+                      onFileContentChange={updateFileContent}
+                    />
+                  </div>
                 </Panel>
                 {activeTabs.length > 0 && (
                   <>
                     <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors" />
-                    <Panel defaultSize={60} minSize={20}>
-                      <div className="h-full flex flex-col border-l border-gray-700">
+                    <Panel defaultSize={40} minSize={20} maxSize={70}>
+                      <div className="h-full flex flex-col border-l border-gray-700 min-w-0">
                         <Tabs value={selectedTab || undefined} onValueChange={(val) => setSelectedTab(val as TabType)} className="flex flex-col h-full">
                           <TabsList className="bg-gray-800 border-b border-gray-700 flex ">
                             {activeTabs.map((tab) => (
@@ -783,6 +905,16 @@ const CodingPagePostPodCreation = () => {
                                       executionResult={executionResult}
                                       isExecuting={isExecuting}
                                     />
+                                  </div>
+                                )}
+                                {tab === 'vcs' && (
+                                  <div className="h-full w-full overflow-y-auto">
+                                    <UnifiedVersionControl projectId={projectId} />
+                                  </div>
+                                )}
+                                {tab === 'ai' && (
+                                  <div className="h-full w-full overflow-hidden">
+                                    <AIPanel projectId={projectId} />
                                   </div>
                                 )}
                               </TabsContent>

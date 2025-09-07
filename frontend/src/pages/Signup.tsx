@@ -2,7 +2,7 @@
 import { useContext, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Button from "@/components/ui/button-custom";
-import { Eye, EyeOff, Key, Mail, User } from "lucide-react";
+import { Eye, EyeOff, Key, Mail, User, CheckCircle, XCircle } from "lucide-react";
 import { AuthContext } from "@/context/AuthContext";
 import { verifyDetailsAndSendOTP } from "@/services/operations/AuthAPI";
 
@@ -15,7 +15,34 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordRequirements, setPasswordRequirements] = useState({
+    minLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  });
   const navigate = useNavigate();
+  
+  const validatePassword = (password: string) => {
+    setPasswordRequirements({
+      minLength: password.length >= 8,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    });
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    validatePassword(newPassword);
+  };
+
+  const isPasswordValid = Object.values(passwordRequirements).every(req => req);
+  const passwordsMatch = password === confirmPassword;
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +62,7 @@ const Signup = () => {
     <div className="min-h-screen bg-dark-bg flex">
       {/* Left side - Signup Form */}
       <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
+        <div className="relative max-w-md w-full space-y-8">
           <div className="text-center">
             <Link to="/" className="flex justify-center items-center mb-6">
               <div className="w-10 h-10 bg-gradient-to-r from-codevo-blue to-codevo-cyan rounded-md flex items-center justify-center glow">
@@ -112,7 +139,9 @@ const Signup = () => {
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={handlePasswordChange}
+                    onFocus={() => setShowPasswordModal(true)}
+                    onBlur={() => setShowPasswordModal(false)}
                     className="appearance-none relative block w-full pl-10 pr-10 py-2 border border-dark-border bg-dark-accent rounded-md placeholder-gray-500 text-black focus:outline-none focus:ring-2 focus:ring-codevo-blue focus:border-transparent"
                     placeholder="Password (min. 8 characters)"
                     minLength={8}
@@ -169,12 +198,26 @@ const Signup = () => {
               </div>
             </div>
 
+            {/* Password Match Indicator */}
+            {confirmPassword && (
+              <div className="flex items-center space-x-2">
+                {passwordsMatch ? (
+                  <CheckCircle size={16} className="text-green-500" />
+                ) : (
+                  <XCircle size={16} className="text-red-500" />
+                )}
+                <span className={`text-sm ${passwordsMatch ? 'text-green-400' : 'text-red-400'}`}>
+                  {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                </span>
+              </div>
+            )}
+
             <div>
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isPasswordValid || !passwordsMatch}
                 className={`w-full flex justify-center items-center bg-codevo-blue hover:bg-blue-600 text-white py-2 px-4 rounded-md transition ${
-                  loading ? "opacity-70 cursor-not-allowed" : ""
+                  loading || !isPasswordValid || !passwordsMatch ? "opacity-70 cursor-not-allowed" : ""
                 }`}
               >
                 {loading ? (
@@ -211,8 +254,78 @@ const Signup = () => {
               </p>
             </div>
           </form>
+
+          {/* Password Requirements Modal */}
+          {showPasswordModal && (
+            <div className="md:absolute -right-[60%] top-[50%] sm:relative translate-y-[-50%] z-50">
+              <div className="bg-gray-800 border border-dark-border rounded-lg p-6 max-w-sm shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-medium text-white">Password Requirements</h4>
+                  <button
+                    onClick={() => setShowPasswordModal(false)}
+                    className="text-gray-400 hover:text-white focus:outline-none"
+                  >
+                    <XCircle size={20} />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    {passwordRequirements.minLength ? (
+                      <CheckCircle size={16} className="text-green-500" />
+                    ) : (
+                      <XCircle size={16} className="text-red-500" />
+                    )}
+                    <span className={`text-sm ${passwordRequirements.minLength ? 'text-green-400' : 'text-red-400'}`}>
+                      At least 8 characters
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {passwordRequirements.hasUppercase ? (
+                      <CheckCircle size={16} className="text-green-500" />
+                    ) : (
+                      <XCircle size={16} className="text-red-500" />
+                    )}
+                    <span className={`text-sm ${passwordRequirements.hasUppercase ? 'text-green-400' : 'text-red-400'}`}>
+                      One uppercase letter
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {passwordRequirements.hasLowercase ? (
+                      <CheckCircle size={16} className="text-green-500" />
+                    ) : (
+                      <XCircle size={16} className="text-red-500" />
+                    )}
+                    <span className={`text-sm ${passwordRequirements.hasLowercase ? 'text-green-400' : 'text-red-400'}`}>
+                      One lowercase letter
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {passwordRequirements.hasNumber ? (
+                      <CheckCircle size={16} className="text-green-500" />
+                    ) : (
+                      <XCircle size={16} className="text-red-500" />
+                    )}
+                    <span className={`text-sm ${passwordRequirements.hasNumber ? 'text-green-400' : 'text-red-400'}`}>
+                      One number
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {passwordRequirements.hasSpecialChar ? (
+                      <CheckCircle size={16} className="text-green-500" />
+                    ) : (
+                      <XCircle size={16} className="text-red-500" />
+                    )}
+                    <span className={`text-sm ${passwordRequirements.hasSpecialChar ? 'text-green-400' : 'text-red-400'}`}>
+                      One special character
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
       
       {/* Right side - Decorative */}
       <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">

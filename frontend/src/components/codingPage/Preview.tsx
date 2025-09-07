@@ -37,13 +37,15 @@ export const Preview = ({ fileContents, activeFile }: PreviewProps) => {
     
          try {
        // Make request to /preview endpoint to start/restart the server
-       const response = await fetch(`http://${projectId}.codevo.live/preview`, {
+      //  https://${projectId}.127.0.0.1.sslip.io/preview
+       const response = await fetch(`https://${projectId}.codevo.live/preview`, {
          method: 'GET',
          mode: 'no-cors' // Handle CORS
        });
        
        // Set the direct URL for the iframe (using the root path which routes to port 3001)
-       const directUrl = `http://${projectId}.codevo.live/`;
+      //  https://${projectId}.127.0.0.1.sslip.io/
+       const directUrl = `https://${projectId}.codevo.live/`;
        setPreviewUrl(directUrl);
       
       // Reload iframe
@@ -52,7 +54,7 @@ export const Preview = ({ fileContents, activeFile }: PreviewProps) => {
       }
       
     } catch (err) {
-      console.error('[Preview] Error starting preview server:', err);
+      // console.error('[Preview] Error starting preview server:', err);
       setError('Failed to start preview server');
     } finally {
       setIsRefreshing(false);
@@ -147,12 +149,12 @@ export const Preview = ({ fileContents, activeFile }: PreviewProps) => {
               className="w-full h-full border-0"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
               onLoad={() => {
-                console.log('[Preview] Iframe loaded successfully');
+                // console.log('[Preview] Iframe loaded successfully');
                 setIsLoading(false);
                 setError('');
               }}
               onError={() => {
-                console.error('[Preview] Failed to load preview');
+                // console.error('[Preview] Failed to load preview');
                 setIsLoading(false);
                 setError('Failed to load preview');
               }}

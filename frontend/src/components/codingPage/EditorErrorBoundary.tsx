@@ -21,7 +21,7 @@ export class EditorErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Editor Error Boundary caught an error:', error, errorInfo);
+    // console.error('Editor Error Boundary caught an error:', error, errorInfo);
   }
 
   render() {

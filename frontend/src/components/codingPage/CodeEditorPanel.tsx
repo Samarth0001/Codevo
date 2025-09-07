@@ -1,4 +1,4 @@
-import Editor from "@monaco-editor/react";
+import Editor, { DiffEditor } from "@monaco-editor/react";
 import { useEffect, useRef, useContext, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { AuthContext } from "@/context/AuthContext";
@@ -9,6 +9,7 @@ import { Socket } from "socket.io-client";
 import { UserAwareness } from "./UserAwareness";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { EditorErrorBoundary } from "./EditorErrorBoundary";
+import { aiBus } from "@/utils/AIEventBus";
 
 interface CodeEditorPanelProps {
   currentTheme: string;
@@ -27,11 +28,77 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   const [fileContents, setFileContents] = useState<FileContent>({});
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [editorKey, setEditorKey] = useState(0); // Force re-mount when this changes
+  const [diffMode, setDiffMode] = useState<{ oldCode: string; newCode: string; fileName: string } | null>(null);
 
   const { activeFile, setActiveFile, openFiles, setOpenFiles } = useEditor();
   const { user } = useContext(AuthContext);
   const { projectId: roomId } = useParams();
-  const { applyFileChange, getFileChanges } = useCollaboration();
+  const { applyFileChange, getFileChanges, permissions } = useCollaboration();
+  const canEditCode = permissions?.canEditCode || false;
+  // AI integration: listen for requests and apply actions
+  useEffect(() => {
+    const offRequestSelection = aiBus.on('ai:requestSelection', () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const model = editor.getModel?.();
+      const selection = editor.getSelection?.();
+      const text = model && selection ? model.getValueInRange(selection) : '';
+      aiBus.emit('editor:selection', { text, range: selection });
+    });
+
+    const offRequestFile = aiBus.on('ai:requestFileContext', () => {
+      const editor = editorRef.current;
+      const model = editor?.getModel?.();
+      const content = model?.getValue?.() || '';
+      aiBus.emit('editor:fileContext', { path: activeFile, content });
+    });
+
+    const offRequestFileList = aiBus.on('ai:requestFileList', () => {
+      const files = Object.keys(fileContents);
+      aiBus.emit('editor:fileList', { files, active: activeFile });
+    });
+
+    const offRequestSpecific = aiBus.on('ai:requestSpecificFile', ({ path }) => {
+      const content = typeof fileContents[path] === 'string' ? fileContents[path] : '';
+      aiBus.emit('editor:fileContext', { path, content });
+    });
+
+    const offApplyGenerated = aiBus.on('ai:applyGenerated', ({ code, strategy }) => {
+      const editor = editorRef.current;
+      if (!editor || !canEditCode) return;
+      const model = editor.getModel?.();
+      const selection = editor.getSelection?.();
+      if (!model) return;
+      
+      if (strategy === 'replaceFile') {
+        // Replace entire file content
+        const fullRange = model.getFullModelRange();
+        editor.executeEdits('ai', [
+          { range: fullRange, text: code, forceMoveMarkers: true }
+        ]);
+      } else if (strategy === 'insertAtCursor' || !selection) {
+        editor.trigger('ai', 'type', { text: code });
+      } else {
+        // Replace selection
+        editor.executeEdits('ai', [
+          { range: selection, text: code, forceMoveMarkers: true }
+        ]);
+      }
+    });
+
+    const offShowDiff = aiBus.on('ai:showDiff', ({ oldCode, newCode, fileName }) => {
+      setDiffMode({ oldCode, newCode, fileName });
+    });
+
+    return () => {
+      offRequestSelection();
+      offRequestFile();
+      offApplyGenerated();
+      offRequestFileList();
+      offRequestSpecific();
+      offShowDiff();
+    };
+  }, [canEditCode, activeFile, fileContents]);
 
   function getLanguageForFile(filename: string): string {
     const extension = filename.split('.').pop()?.toLowerCase();
@@ -70,7 +137,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
     if (!socket) return;
 
     const handleFileContent = ({ path, content }: { path: string; content: string }) => {
-      console.log(`[CodeEditorPanel] Received content for: ${path}`);
+      // console.log(`[CodeEditorPanel] Received content for: ${path}`);
       setFileContents(prev => ({
         ...prev,
         [path]: content
@@ -89,16 +156,16 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
     if (!socket) return;
 
     const handleProjectInitialized = ({ filesWithContent }: { filesWithContent: any[] }) => {
-      console.log(`[CodeEditorPanel] Project initialized with ${filesWithContent.length} files`);
+      // console.log(`[CodeEditorPanel] Project initialized with ${filesWithContent.length} files`);
       
       const newFileContents: FileContent = {};
       filesWithContent.forEach(file => {
         if (file.type === 'file' && file.path && file.content !== undefined) {
-          console.log(`[CodeEditorPanel] Processing file ${file.path}:`, {
-            contentType: typeof file.content,
-            contentLength: file.content?.length,
-            contentPreview: typeof file.content === 'string' ? file.content.substring(0, 50) : file.content
-          });
+          // console.log(`[CodeEditorPanel] Processing file ${file.path}:`, {
+          //   contentType: typeof file.content,
+          //   contentLength: file.content?.length,
+          //   contentPreview: typeof file.content === 'string' ? file.content.substring(0, 50) : file.content
+          // });
           
           newFileContents[file.path] = typeof file.content === 'string' ? file.content : String(file.content || '');
         }
@@ -115,12 +182,12 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
       userId: string;
       timestamp: number;
     }) => {
-      console.log(`[CodeEditorPanel] Content updated by ${userId} for: ${path}`, {
-        contentType: typeof content,
-        contentLength: content?.length,
-        contentPreview: typeof content === 'string' ? content.substring(0, 50) : content,
-        diffType
-      });
+      // console.log(`[CodeEditorPanel] Content updated by ${userId} for: ${path}`, {
+      //   contentType: typeof content,
+      //   contentLength: content?.length,
+      //   contentPreview: typeof content === 'string' ? content.substring(0, 50) : content,
+      //   diffType
+      // });
       
       // Apply the change
       applyFileChange(path, {
@@ -151,25 +218,25 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
     };
 
     const handleFileDeleted = ({ path }: { path: string; deletedBy: string; timestamp: number }) => {
-      console.log(`[CodeEditorPanel] File deleted: ${path}`);
+      // console.log(`[CodeEditorPanel] File deleted: ${path}`);
       
       // Remove the deleted file from fileContents state
       setFileContents(prev => {
         const newFileContents = { ...prev };
         delete newFileContents[path];
-        console.log(`[CodeEditorPanel] Removed ${path} from fileContents, remaining files:`, Object.keys(newFileContents));
+        // console.log(`[CodeEditorPanel] Removed ${path} from fileContents, remaining files:`, Object.keys(newFileContents));
         return newFileContents;
       });
 
       // If the deleted file was the active file, force editor re-mount
       if (activeFile === path) {
-        console.log(`[CodeEditorPanel] Active file was deleted, forcing editor re-mount`);
+        // console.log(`[CodeEditorPanel] Active file was deleted, forcing editor re-mount`);
         setEditorKey(prev => prev + 1);
       }
     };
 
     const handleFileCreated = (file: { path: string; name: string; type: string; createdBy: string; timestamp: number }) => {
-      console.log(`[CodeEditorPanel] File created: ${file.path}`);
+      // console.log(`[CodeEditorPanel] File created: ${file.path}`);
       
       // Add the new file to fileContents state with empty content
       if (file.type === 'file') {
@@ -181,7 +248,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
     };
 
     const handleFileRenamed = ({ oldPath, newPath }: { oldPath: string; newPath: string; renamedBy: string; timestamp: number }) => {
-      console.log(`[CodeEditorPanel] File renamed: ${oldPath} -> ${newPath}`);
+      // console.log(`[CodeEditorPanel] File renamed: ${oldPath} -> ${newPath}`);
       
       // Update fileContents state by moving content from old path to new path
       setFileContents(prev => {
@@ -189,7 +256,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
         if (newFileContents[oldPath] !== undefined) {
           newFileContents[newPath] = newFileContents[oldPath];
           delete newFileContents[oldPath];
-          console.log(`[CodeEditorPanel] Moved content from ${oldPath} to ${newPath}`);
+          // console.log(`[CodeEditorPanel] Moved content from ${oldPath} to ${newPath}`);
         }
         return newFileContents;
       });
@@ -216,7 +283,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
 
     // Check if the active file exists in fileContents (to prevent saving to deleted files)
     if (!fileContents.hasOwnProperty(activeFile)) {
-      console.log(`[CodeEditorPanel] Attempted to save content to deleted file: ${activeFile}, ignoring`);
+      // console.log(`[CodeEditorPanel] Attempted to save content to deleted file: ${activeFile}, ignoring`);
       return;
     }
 
@@ -244,7 +311,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   // Handle active file changes and ensure editor content is in sync
   useEffect(() => {
     if (activeFile && !fileContents[activeFile]) {
-      console.log(`[CodeEditorPanel] Active file ${activeFile} has no content, clearing editor`);
+      // console.log(`[CodeEditorPanel] Active file ${activeFile} has no content, clearing editor`);
       // If the active file doesn't exist in fileContents, it might have been deleted
       // The editor will show empty content, which is correct
     }
@@ -253,7 +320,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   // Force editor re-mount when active file changes
   useEffect(() => {
     if (activeFile) {
-      console.log(`[CodeEditorPanel] Active file changed to: ${activeFile}, updating editor key`);
+      // console.log(`[CodeEditorPanel] Active file changed to: ${activeFile}, updating editor key`);
       setEditorKey(prev => prev + 1);
     }
   }, [activeFile]);
@@ -268,6 +335,14 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   const handleEditorMount = (editor: any) => {
     editorRef.current = editor;
     setIsEditorReady(true);
+    
+    // Add selection change listener
+    editor.onDidChangeCursorSelection((e: any) => {
+      const selection = e.selection;
+      const model = editor.getModel?.();
+      const text = model && selection ? model.getValueInRange(selection) : '';
+      aiBus.emit('editor:selection', { text, range: selection });
+    });
   };
 
   const handleNewFile = () => {
@@ -298,7 +373,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
     
     const content = fileContents[activeFile];
     if (content === undefined) {
-      console.log(`[CodeEditorPanel] No content found for active file: ${activeFile}, returning empty string`);
+      // console.log(`[CodeEditorPanel] No content found for active file: ${activeFile}, returning empty string`);
       return '';
     }
     
@@ -312,17 +387,12 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
   };
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
-      <div className="flex items-center px-4 py-1 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700">
-        {/* <div className="flex space-x-1.5">
-          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        </div> */}
+    <div className="flex flex-col h-full w-full overflow-hidden min-w-0 editor-container">
+      <div className="flex items-center px-4 py-1 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700 z-30 flex-shrink-0">
         <div className="ml-4 text-sm font-medium text-gray-300">
           {activeFile || 'No file selected'}
         </div>
-        <div className="ml-auto flex items-center space-x-2">
+        <div className="ml-auto flex items-center space-x-2 relative">
           <CollaborationStatus />
           <Button variant="ghost" size="sm" className="text-xs text-gray-400 h-6 px-2">
             {getCurrentFileLanguage()}
@@ -348,23 +418,73 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative">
-        <EditorErrorBoundary>
-          <Editor
-            key={`${activeFile}-${editorKey}`}
-            height="100%"
-            width="100%"
-            language={getCurrentFileLanguage()}
-            value={getCurrentFileContent()}
-            theme={currentTheme}
-            onMount={handleEditorMount}
-            onChange={handleEditorChange}
-          options={{
-            // Basic editor settings
-            fontSize: 14,
-            lineHeight: 21,
-            wordWrap: "on",
-            automaticLayout: true,
+      <div className="flex-1 min-h-0 relative z-10 min-w-0">
+        {diffMode ? (
+          <div className="h-full flex flex-col">
+            <div className="bg-gray-800 px-3 py-2 border-b border-gray-700 flex items-center justify-between">
+              <div className="text-sm font-medium text-gray-300">
+                Diff: {diffMode.fileName}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDiffMode(null)}
+                className="text-gray-400 border-gray-600 hover:bg-gray-700"
+              >
+                Close Diff
+              </Button>
+            </div>
+            <div className="flex-1">
+              <DiffEditor
+                height="100%"
+                width="100%"
+                language={getLanguageForFile(diffMode.fileName)}
+                original={diffMode.oldCode}
+                modified={diffMode.newCode}
+                theme={currentTheme}
+                options={{
+                  readOnly: true,
+                  fontSize: 14,
+                  lineHeight: 21,
+                  wordWrap: "on",
+                  automaticLayout: true,
+                  minimap: { enabled: true },
+                  renderWhitespace: "selection",
+                  renderControlCharacters: false,
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <EditorErrorBoundary>
+            <Editor
+              key={`${activeFile}-${editorKey}`}
+              height="100%"
+              width="100%"
+              language={getCurrentFileLanguage()}
+              value={getCurrentFileContent()}
+              theme={currentTheme}
+              onMount={handleEditorMount}
+              onChange={handleEditorChange}
+              options={{
+              // Basic editor settings
+              fontSize: 14,
+              lineHeight: 21,
+              wordWrap: "on",
+              automaticLayout: true,
+              readOnly: !canEditCode, // Disable editing for readers
+              // Layout constraints
+              scrollbar: {
+                vertical: "auto",
+                horizontal: "auto",
+                verticalScrollbarSize: 12,
+                horizontalScrollbarSize: 12,
+                useShadows: false,
+                verticalHasArrows: false,
+                horizontalHasArrows: false,
+                handleMouseWheel: true,
+                alwaysConsumeMouseWheel: false
+              },
             
             // Enable essential features
             minimap: { enabled: true },
@@ -492,6 +612,7 @@ export const CodeEditorPanel = ({ currentTheme, setCurrentTheme, socket, onFileC
           }}
         />
         </EditorErrorBoundary>
+        )}
         <UserAwareness editorRef={editorRef} />
       </div>
     </div>

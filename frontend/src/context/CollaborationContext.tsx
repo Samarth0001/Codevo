@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Socket } from 'socket.io-client';
+import { UserRole, PermissionConfig } from '@/utils/permissions';
 
 interface UserAwareness {
   userId: string;
@@ -24,6 +25,8 @@ interface CollaborationContextType {
   activeUsers: UserAwareness[];
   fileChanges: Map<string, FileChange[]>;
   isCollaborating: boolean;
+  userRole: UserRole | null;
+  permissions: PermissionConfig | null;
   updateAwareness: (awareness: Partial<UserAwareness>) => void;
   applyFileChange: (path: string, change: FileChange) => void;
   getFileChanges: (path: string) => FileChange[];
@@ -37,9 +40,11 @@ interface CollaborationProviderProps {
   socket: Socket | null;
   userId: string | null;
   username: string;
+  role?: UserRole | null;
+  permissions?: PermissionConfig | null;
 }
 
-export function CollaborationProvider({ children, socket, userId, username }: CollaborationProviderProps) {
+export function CollaborationProvider({ children, socket, userId, username, role, permissions }: CollaborationProviderProps) {
   const effectiveUserId = userId || socket?.id || 'anonymous';
   const [users, setUsers] = useState<UserAwareness[]>([]);
   const [fileChanges, setFileChanges] = useState<Map<string, FileChange[]>>(new Map());
@@ -153,6 +158,8 @@ export function CollaborationProvider({ children, socket, userId, username }: Co
         activeUsers,
         fileChanges,
         isCollaborating,
+        userRole: role || null,
+        permissions: permissions || null,
         updateAwareness,
         applyFileChange,
         getFileChanges,

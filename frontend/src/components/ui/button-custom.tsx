@@ -6,13 +6,13 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "default" | "sm" | "lg" | "icon";
 }
 
-const Button: React.FC<ButtonProps> = ({
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ 
   className = "",
   variant = "default",
   size = "default",
   children,
   ...props
-}) => {
+}, ref) => {
   const variantClasses = {
     default: "bg-blue-600 text-white hover:bg-blue-700",
     outline: "border border-dark-border text-white hover:border-blue-500 hover:bg-dark-accent/50",
@@ -38,11 +38,14 @@ const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={buttonClasses}
+      ref={ref}
       {...props}
     >
       {children}
     </button>
   );
-};
+});
+
+Button.displayName = "Button";
 
 export default Button;

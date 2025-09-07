@@ -116,11 +116,11 @@ const generateRandomName = (): string => {
       return;
     }
 
-    console.log('Sending to copyBaseCode:', { 
-      uniqueId, 
-      selectedTemplate: selectedTemplateData.slug,
-      templateId: templateId // MongoDB ObjectId for project creation
-    });
+    // console.log('Sending to copyBaseCode:', { 
+    //   uniqueId, 
+    //   selectedTemplate: selectedTemplateData.slug,
+    //   templateId: templateId // MongoDB ObjectId for project creation
+    // });
     
     // 1. Copy base code (using template slug for R2 path)
     await copyBaseCode({ uniqueId, selectedTemplate: selectedTemplateData.slug }, setLoading, () => {

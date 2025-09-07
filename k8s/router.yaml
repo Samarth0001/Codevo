@@ -1,110 +1,110 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: reverseproxy
-  labels:
-    app: reverseproxy
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: reverseproxy
-  template:
-    metadata:
-      labels:
-        app: reverseproxy
-    spec:
-      containers:
-        - name: reverseproxy
-          image: extremecoder01/router-repl
-          ports:
-            - containerPort: 80
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: reverseproxy
+#   labels:
+#     app: reverseproxy
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: reverseproxy
+#   template:
+#     metadata:
+#       labels:
+#         app: reverseproxy
+#     spec:
+#       containers:
+#         - name: reverseproxy
+#           image: extremecoder01/router-repl
+#           ports:
+#             - containerPort: 80
 
             
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: reverseproxy
-  labels:
-    app: reverseproxy
-spec:
-  type: ClusterIP
-  selector:
-    app: reverseproxy
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80 
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: reverseproxy
+#   labels:
+#     app: reverseproxy
+# spec:
+#   type: ClusterIP
+#   selector:
+#     app: reverseproxy
+#   ports:
+#     - protocol: TCP
+#       port: 80
+#       targetPort: 80 
 
 
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: global-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/enable-websocket: "true"
-    nginx.ingress.kubernetes.io/upgrade: "websocket"
-    nginx.ingress.kubernetes.io/server-alias: "*.codevo.dev"
-    # nginx.ingress.kubernetes.io/configuration-snippet: |
-    #   proxy_set_header Upgrade $http_upgrade;
-    #   proxy_set_header Connection "upgrade";
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: global-ingress
+#   annotations:
+#     nginx.ingress.kubernetes.io/use-regex: "true"
+#     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+#     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+#     nginx.ingress.kubernetes.io/enable-cors: "true"
+#     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+#     nginx.ingress.kubernetes.io/enable-websocket: "true"
+#     nginx.ingress.kubernetes.io/upgrade: "websocket"
+#     nginx.ingress.kubernetes.io/server-alias: "*.codevo.dev"
+#     # nginx.ingress.kubernetes.io/configuration-snippet: |
+#     #   proxy_set_header Upgrade $http_upgrade;
+#     #   proxy_set_header Connection "upgrade";
 
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: "api.codevo.dev"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: backend
-              port:
-                number: 4000
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   - host: "api.codevo.dev"
+#     http:
+#       paths:
+#         - path: /
+#           pathType: Prefix
+#           backend:
+#             service:
+#               name: backend
+#               port:
+#                 number: 4000
 
-  - host: "app.codevo.dev"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: frontend
-              port:
-                number: 5173
+#   - host: "app.codevo.dev"
+#     http:
+#       paths:
+#         - path: /
+#           pathType: Prefix
+#           backend:
+#             service:
+#               name: frontend
+#               port:
+#                 number: 5173
 
-  - host: "yjs.codevo.dev"
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: yjs-server
-              port:
-                number: 3003
+#   - host: "yjs.codevo.dev"
+#     http:
+#       paths:
+#         - path: /
+#           pathType: Prefix
+#           backend:
+#             service:
+#               name: yjs-server
+#               port:
+#                 number: 3003
 
-  - host: "*.codevo.dev"
-    http:
-      paths:
-        # - path: /(.*)   #matches literally every possible path a user might visit
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: reverseproxy
-              port:
-                number: 80  # HTTP port exposed by router-repl service
+#   - host: "*.codevo.dev"
+#     http:
+#       paths:
+#         # - path: /(.*)   #matches literally every possible path a user might visit
+#         - path: /
+#           pathType: Prefix
+#           backend:
+#             service:
+#               name: reverseproxy
+#               port:
+#                 number: 80  # HTTP port exposed by router-repl service
   
 
 

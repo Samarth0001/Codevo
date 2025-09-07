@@ -14,19 +14,64 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: extremecoder01/frontend
+          image: extremecoder01/frontend   # Replace with your Docker image
           ports:
-            - containerPort: 5173
+            - containerPort: 80          # NGINX serves on port 80
+
 ---
+# Frontend Service
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
 spec:
+  type: ClusterIP
   selector:
     app: frontend
   ports:
     - protocol: TCP
-      port: 5173
-      targetPort: 5173
-  type: ClusterIP
+      port: 80
+      targetPort: 80
+
+---
+# Frontend Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - codevo.live
+        - www.codevo.live
+      secretName: server-tls-secret
+  rules:
+    - host: codevo.live                # Main domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: www.codevo.live                # Main domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

@@ -23,6 +23,7 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - > # base code prefix is templated at runtime
+              rm -rf /workspace/* /workspace/.* 2>/dev/null || true &&
               aws s3 cp "s3://codevo/BASE_CODE_PREFIX" /workspace/ --recursive --endpoint-url $R2_ENDPOINT &&
               echo "Resources copied from S3";
           env:
@@ -89,7 +90,8 @@ spec:
             - containerPort: 3002
           envFrom:
             - secretRef:
-                name: worker-env-secret   #change here
+                name: 
+                   #change here
                 # run below command to create the secret in CLI
                 # kubectl create secret generic worker-env-secret --from-env-file=.env
           volumeMounts:
@@ -133,13 +135,36 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/websocket-services: preview-service
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: '3600'
+    nginx.ingress.kubernetes.io/websocket-services: 'true'
+    nginx.ingress.kubernetes.io/enable-websocket: 'true'
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/cors-allow-methods: 'GET, POST, PUT, DELETE, OPTIONS'
+    nginx.ingress.kubernetes.io/cors-allow-headers: 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization'
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - service_name.codevo.live
+      secretName: server-tls-secret
   rules:
   - host: service_name.codevo.live     # change here
     http:
       paths:
       - path: /user/socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: service_name
+            port:
+              number: 3000
+      - path: /api
         pathType: Prefix
         backend:
           service:

@@ -14,7 +14,7 @@ interface ConsoleProps {
 }
 
 export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
-  const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn' | 'command' | 'output-label'; message: string}[]>([
+  const [logs, setLogs] = useState<{type: 'log' | 'error' | 'warn' | 'command' | 'output-label' | 'url'; message: string; url?: string}[]>([
     { type: 'log', message: '> Console ready' },
     { type: 'log', message: '> Click the Run button to execute your code' }
   ]);
@@ -41,11 +41,26 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
   // Process output to identify commands and color them
   const processOutput = (output: string) => {
     const lines = output.split('\n');
-    const processedLines: {type: 'log' | 'command'; message: string}[] = [];
+    const processedLines: {type: 'log' | 'command' | 'url'; message: string; url?: string}[] = [];
     
     for (const line of lines) {
       // Skip dotenv injection messages
       if (line.includes('[dotenv@') && line.includes('injecting env')) {
+        continue;
+      }
+      
+      // Check if line contains a URL (preview server URL)
+      const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
+      if (urlMatch) {
+        // Special handling for preview server URLs
+        const url = urlMatch[1];
+        // const isPreviewUrl = url.includes('127.0.0.1.sslip.io') || url.includes('localhost');
+        
+        processedLines.push({ 
+          type: 'url', 
+          message: line.replace(url, `[${url}]`), 
+          url: url 
+        });
         continue;
       }
       
@@ -68,7 +83,7 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
   // Handle execution results
   useEffect(() => {
     if (executionResult) {
-      const newLogs: {type: 'log' | 'error' | 'warn' | 'command' | 'output-label'; message: string}[] = [];
+      const newLogs: {type: 'log' | 'error' | 'warn' | 'command' | 'output-label' | 'url'; message: string; url?: string}[] = [];
       
       // Add execution result header
       if (executionResult.success) {
@@ -96,7 +111,7 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
     }
   }, [executionResult]);
 
-  const getLogStyle = (type: 'log' | 'error' | 'warn' | 'command' | 'output-label') => {
+  const getLogStyle = (type: 'log' | 'error' | 'warn' | 'command' | 'output-label' | 'url') => {
     switch (type) {
       case 'error':
         return 'text-red-400';
@@ -106,6 +121,8 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
         return 'text-yellow-400';
       case 'output-label':
         return 'text-blue-300';
+      case 'url':
+        return 'text-green-400';
       default:
         return 'text-white';
     }
@@ -125,7 +142,32 @@ export const Console = ({ executionResult, isExecuting }: ConsoleProps) => {
             animationDelay: `${i * 0.1}s`
           }}
         >
-          {log.message}
+          {log.type === 'url' && log.url ? (
+            <span>
+              {log.message.split('[').map((part, index) => {
+                if (part.includes(']')) {
+                  const [url, rest] = part.split(']');
+                  return (
+                    <span key={index}>
+                      <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 underline cursor-pointer font-semibold"
+                        title="Click to open preview in new tab"
+                      >
+                        {url} 🔗
+                      </a>
+                      {rest}
+                    </span>
+                  );
+                }
+                return part;
+              })}
+            </span>
+          ) : (
+            log.message
+          )}
         </div>
       ))}
 

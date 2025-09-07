@@ -41,7 +41,7 @@ const AuthProvider= ({children}:{children:React.ReactNode}) => {
     }catch(err){
       setLoggedIn(false);
       setUser(null);
-      console.log("User not logged in");
+      // console.log("User not logged in");
     }
     setLoading(false);
   }

@@ -29,12 +29,12 @@ const CTA: React.FC = () => {
             >
               Get Started for Free
             </Button>
-            <Button 
+            {/* <Button 
               variant="outline"
               className="text-lg py-6 px-8"
             >
               Schedule a Demo
-            </Button>
+            </Button> */}
           </div>
         </div>
       </div>

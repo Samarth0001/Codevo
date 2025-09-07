@@ -26,7 +26,7 @@ export const VerifyEmail = () => {
             toast.error("Enter complete OTP")
             return;
         }
-        console.log(otp)
+        // console.log(otp)
         setOtp("");
         verifyEmailAndSignUp(otp,signupData,setUser,setLoading,navigate)
         setLoading(false);

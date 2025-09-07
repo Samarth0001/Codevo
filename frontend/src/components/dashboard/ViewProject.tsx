@@ -15,11 +15,22 @@ import {
   GitBranch,
   Tag,
   MoreVertical,
-  Trash2
+  Trash2,
+  UserX,
+  UserCheck,
+  Mail,
+  UserPlus
 } from "lucide-react";
 import Button from "@/components/ui/button-custom";
 import { AuthContext } from '@/context/AuthContext';
 import { updateProjectDescription, deleteProject } from '@/services/operations/ProjectAPI';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { apiConnector } from '@/services/apiConnector';
+import { invitationEndPoints } from '@/services/apis';
+import { toast } from 'react-hot-toast';
+
+const { MANAGE_INVITATIONS_API, REMOVE_COLLABORATOR_API, CREATE_INVITATION_API } = invitationEndPoints;
 
 const ViewProject = () => {
   const { user, setUser, refreshUser } = useContext(AuthContext);
@@ -30,13 +41,26 @@ const ViewProject = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('all');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [collaboratorsModalOpen, setCollaboratorsModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [collaborators, setCollaborators] = useState<any[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+  const [loadingCollaborators, setLoadingCollaborators] = useState(false);
+  const [removingCollaborator, setRemovingCollaborator] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'reader' | 'editor'>('reader');
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   // Get projects and sort by creation time in descending order
-  const projects = (user?.projects || []).sort((a, b) => {
-    const dateA = new Date(a.createdAt || a.lastUpdatedAt || 0);
-    const dateB = new Date(b.createdAt || b.lastUpdatedAt || 0);
-    return dateB.getTime() - dateA.getTime();
-  });
+  const projects = (user?.projects || [])
+    .filter((p: any) => p?.isOwner)
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.lastUpdatedAt || 0);
+      const dateB = new Date(b.createdAt || b.lastUpdatedAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
 
   // Categorize projects by time
   const categorizedProjects = useMemo(() => {
@@ -126,17 +150,13 @@ const ViewProject = () => {
       setEditingProject(null);
       setEditDescription('');
     } catch (error) {
-      console.error('Error updating description:', error);
+      // console.error('Error updating description:', error);
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      return;
-    }
-    
     try {
       setIsDeleting(projectId);
       await deleteProject(projectId);
@@ -146,8 +166,10 @@ const ViewProject = () => {
         const updatedProjects = user.projects.filter(project => project.id !== projectId);
         setUser({ ...user, projects: updatedProjects });
       }
+      setDeleteModalOpen(false);
+      setProjectToDelete(null);
     } catch (error) {
-      console.error('Error deleting project:', error);
+      // console.error('Error deleting project:', error);
     } finally {
       setIsDeleting(null);
     }
@@ -169,6 +191,84 @@ const ViewProject = () => {
       case 'React Javascript': return 'bg-cyan-400';
       case 'Node.js': return 'bg-green-600';
       default: return 'bg-gray-500';
+    }
+  };
+
+  // Load collaborators for a project
+  const loadCollaborators = async (project: any) => {
+    setSelectedProject(project);
+    setCollaboratorsModalOpen(true);
+    setLoadingCollaborators(true);
+    
+    try {
+      const res = await apiConnector('GET', `${MANAGE_INVITATIONS_API}/${project.projectId || project.id}`);
+      if (res.data.success) {
+        setCollaborators(res.data.collaborators || []);
+        setPendingInvites(res.data.pendingInvitations || []);
+      } else {
+        toast.error(res.data.message || 'Failed to load collaborators');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to load collaborators');
+    } finally {
+      setLoadingCollaborators(false);
+    }
+  };
+
+  // Remove a collaborator
+  const removeCollaborator = async (targetUserId: string) => {
+    if (!selectedProject) return;
+    
+    try {
+      setRemovingCollaborator(targetUserId);
+      const res = await apiConnector('POST', REMOVE_COLLABORATOR_API, { 
+        projectId: selectedProject.projectId || selectedProject.id, 
+        userId: targetUserId 
+      });
+      
+      if (res.data.success) {
+        toast.success('Collaborator removed');
+        // Refresh collaborators list
+        await loadCollaborators(selectedProject);
+      } else {
+        toast.error(res.data.message || 'Failed to remove collaborator');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to remove collaborator');
+    } finally {
+      setRemovingCollaborator(null);
+    }
+  };
+
+  // Send invitation to new collaborator
+  const sendInvitation = async () => {
+    if (!selectedProject || !inviteEmail.trim()) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setSendingInvite(true);
+      const res = await apiConnector('POST', CREATE_INVITATION_API, {
+        projectId: selectedProject.projectId || selectedProject.id,
+        projectName: selectedProject.name,
+        invitedEmail: inviteEmail.trim(),
+        invitedRole: inviteRole
+      });
+
+      if (res.data.success) {
+        toast.success('Invitation sent successfully!');
+        setInviteEmail('');
+        setInviteRole('reader');
+        // Refresh collaborators list to show new pending invitation
+        await loadCollaborators(selectedProject);
+      } else {
+        toast.error(res.data.message || 'Failed to send invitation');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to send invitation');
+    } finally {
+      setSendingInvite(false);
     }
   };
 
@@ -197,12 +297,12 @@ const ViewProject = () => {
           <h1 className="text-2xl font-bold text-white">My Projects</h1>
           <p className="text-gray-400 mt-1">Manage and organize your projects</p>
         </div>
-        <Button 
+        {/* <Button 
           className="bg-codevo-blue hover:bg-codevo-blue/90"
           onClick={() => navigate('/dashboard/home')}
         >
           Create New Project
-        </Button>
+        </Button> */}
       </div>
 
       {/* Category Filters */}
@@ -351,7 +451,7 @@ const ViewProject = () => {
                          <Edit3 className="h-4 w-4" />
                        </button>
                        <button
-                         onClick={() => handleDeleteProject(project.id)}
+                         onClick={() => { setProjectToDelete(project.id); setDeleteModalOpen(true); }}
                          className="p-1 text-gray-400 hover:text-red-400 transition-colors"
                          title="Delete project"
                          disabled={isDeleting === project.id}
@@ -393,47 +493,15 @@ const ViewProject = () => {
                 {/* Stats */}
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center space-x-4">
-                    {/* <div className="flex items-center space-x-1 text-gray-400">
-                      <Star className="h-4 w-4" />
-                      <span>{project.stars || 0}</span>
-                    </div> */}
                     <div className="flex items-center space-x-1 text-gray-400">
-                      <GitBranch className="h-4 w-4" />
-                      <span>{project.forks || 0}</span>
+                      <Users className="h-4 w-4" />
+                      <span>{project.forks || 1}</span>
                     </div>
                   </div>
                   <div className="text-gray-400">
                     Created {formatDate(project.createdAt || project.lastUpdatedAt || '')}
                   </div>
                 </div>
-
-                {/* Collaborators */}
-                {project.collaborators && project.collaborators.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Users className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-400">Collaborators</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {project.collaborators.slice(0, 3).map((collaborator: any, index: number) => (
-                        <div
-                          key={index}
-                          className="flex items-center space-x-1 px-2 py-1 bg-dark-bg rounded-md"
-                        >
-                          <div className="w-6 h-6 bg-codevo-blue rounded-full flex items-center justify-center text-xs text-white">
-                            {collaborator.name?.charAt(0) || 'U'}
-                          </div>
-                          <span className="text-xs text-gray-300">{collaborator.name || 'Unknown'}</span>
-                        </div>
-                      ))}
-                      {project.collaborators.length > 3 && (
-                        <span className="text-xs text-gray-400">
-                          +{project.collaborators.length - 3} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Actions */}
@@ -442,19 +510,10 @@ const ViewProject = () => {
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => navigate(`/coding/${project.projectId || project.id}`, {
-                    state: {
-                      projectName: project.name,
-                      description: project.description,
-                      templateId: project.templateId,
-                      userId: user?._id,
-                      visibility: project.visibility,
-                      tags: project.tags
-                    }
-                  })}
+                  onClick={() => loadCollaborators(project)}
                 >
-                  <Code className="h-4 w-4 mr-1" />
-                  View Code
+                  <Users className="h-4 w-4 mr-1" />
+                  Manage Collaborators
                 </Button>
                 <Button
                   size="sm"
@@ -478,6 +537,192 @@ const ViewProject = () => {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent className="bg-dark-accent border border-dark-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete project?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              This action cannot be undone. This will permanently delete the project and remove it from all collaborators.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-800 text-gray-200 border-gray-700">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => projectToDelete && handleDeleteProject(projectToDelete)}
+            >
+              {isDeleting === projectToDelete ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Collaborators Management Modal */}
+      <Dialog open={collaboratorsModalOpen} onOpenChange={setCollaboratorsModalOpen}>
+        <DialogContent className="bg-gray-900 border border-dark-border text-white max-w-[60vw] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Manage Collaborators - {selectedProject?.name}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex gap-8 py-4">
+            {/* Left Side - Invite New Collaborator Section */}
+            <div className="w-1/2">
+              <h3 className="text-lg font-semibold mb-3 flex items-center">
+                <UserPlus className="h-5 w-5 mr-2 text-blue-400" />
+                Invite New Collaborator
+              </h3>
+              
+              <div className="space-y-3 bg-gray-800 border border-gray-700 rounded-lg p-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="Enter collaborator's email"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-md p-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-codevo-blue"
+                    onKeyPress={(e) => { if (e.key === 'Enter') { sendInvitation(); } }}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Role
+                  </label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as 'reader' | 'editor')}
+                    className="w-full bg-gray-900 border border-gray-600 rounded-md p-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-codevo-blue"
+                  >
+                    <option value="reader">Reader</option>
+                    <option value="editor">Editor</option>
+                  </select>
+                </div>
+                
+                <Button
+                  onClick={sendInvitation}
+                  disabled={sendingInvite || !inviteEmail.trim()}
+                  className="w-full bg-codevo-blue hover:bg-codevo-blue/90 disabled:bg-gray-600"
+                >
+                  {sendingInvite ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Invitation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Right Side - Collaborators and Pending Invitations */}
+            <div className="w-1/2 space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+              {/* Collaborators Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center">
+                  <UserCheck className="h-5 w-5 mr-2 text-green-400" />
+                  Active Collaborators ({collaborators.length})
+                </h3>
+                
+                {loadingCollaborators ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-codevo-blue mx-auto"></div>
+                    <p className="text-gray-400 mt-2">Loading collaborators...</p>
+                  </div>
+                ) : collaborators.length === 0 ? (
+                  <p className="text-gray-400 text-sm">No collaborators yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {collaborators.map((collaborator) => (
+                      <div key={collaborator.userId} className="flex items-center justify-between bg-gray-800 border border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-codevo-blue rounded-full flex items-center justify-center text-white font-semibold">
+                            {collaborator.name?.charAt(0) || collaborator.email?.charAt(0) || 'U'}
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">{collaborator.name || 'Unknown User'}</p>
+                            <p className="text-gray-400 text-sm">{collaborator.email}</p>
+                            <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                              collaborator.role === 'owner' 
+                                ? 'bg-purple-600 text-white' 
+                                : collaborator.role === 'editor' 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-gray-600 text-white'
+                            }`}>
+                              {collaborator.role}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {collaborator.role !== 'owner' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-400 border-red-400 hover:bg-red-500/10"
+                            disabled={removingCollaborator === collaborator.userId}
+                            onClick={() => removeCollaborator(collaborator.userId)}
+                          >
+                            <UserX className="h-4 w-4 mr-1" />
+                            {removingCollaborator === collaborator.userId ? 'Removing...' : 'Remove'}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Invitations Section */}
+              {selectedProject?.isOwner && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    <Mail className="h-5 w-5 mr-2 text-yellow-400" />
+                    Pending Invitations ({pendingInvites.length})
+                  </h3>
+                  
+                  {loadingCollaborators ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-codevo-blue mx-auto"></div>
+                      <p className="text-gray-400 mt-2">Loading invitations...</p>
+                    </div>
+                  ) : pendingInvites.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No pending invitations.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingInvites.map((invite) => (
+                        <div key={invite._id} className="flex items-center justify-between bg-gray-800 border border-gray-700 rounded-lg p-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center text-white font-semibold">
+                              <Mail className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">{invite.invitedEmail}</p>
+                              <p className="text-gray-400 text-sm">Invited as {invite.invitedRole}</p>
+                              <p className="text-gray-500 text-xs">
+                                {formatDate(invite.createdAt)}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <span className="text-yellow-400 text-sm font-medium">Pending</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

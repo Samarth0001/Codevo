@@ -90,7 +90,8 @@
 @layer utilities {
   /* custom scrollbar styles */
   ::-webkit-scrollbar {
-    width: 0px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-thumb {
     background-color: theme('colors.gray.500');
@@ -98,6 +99,47 @@
   }
   ::-webkit-scrollbar-track {
     background-color: transparent;
+  }
+  
+  /* Layout constraints for editor */
+  .editor-container {
+    min-width: 0;
+    overflow: hidden;
+  }
+  
+  /* Ensure proper box-sizing */
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Word wrapping for AI panel messages */
+  .prose p,
+  .prose pre,
+  .prose code,
+  .prose li,
+  .prose blockquote {
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+  
+  /* Ensure long URLs and code break properly */
+  .prose a {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+  
+  /* Terminal specific styles */
+  .xterm {
+    padding-bottom: 2rem !important;
+  }
+  
+  .xterm-viewport {
+    padding-bottom: 2rem !important;
+  }
+  
+  .xterm-screen {
+    padding-bottom: 2rem !important;
   }
 }
 

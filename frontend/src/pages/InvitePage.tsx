@@ -13,7 +13,7 @@ const { GET_INVITATION_DETAILS_API, ACCEPT_INVITATION_API } = invitationEndPoint
 const InvitePage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { user, loggedIn } = useAuth();
+  const { user, loggedIn, refreshUser } = useAuth();
   
   const [invitation, setInvitation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ const InvitePage = () => {
         navigate('/dashboard');
       }
     } catch (error: any) {
-      console.error('Error fetching invitation:', error);
+      // console.error('Error fetching invitation:', error);
       toast.error(error.response?.data?.message || 'Invalid invitation link');
       navigate('/dashboard');
     } finally {
@@ -65,6 +65,8 @@ const InvitePage = () => {
       const response = await apiConnector('POST', `${ACCEPT_INVITATION_API}/${token}`);
       
       if (response.data.success) {
+        // Refresh user to include newly shared project in list
+        await refreshUser();
         toast.success('Successfully joined the project!');
         // Redirect to the project
         navigate(`/coding/${invitation.projectId}`);
@@ -72,7 +74,7 @@ const InvitePage = () => {
         toast.error(response.data.message || 'Failed to join project');
       }
     } catch (error: any) {
-      console.error('Error accepting invitation:', error);
+      // console.error('Error accepting invitation:', error);
       toast.error(error.response?.data?.message || 'Failed to join project');
     } finally {
       setAccepting(false);
