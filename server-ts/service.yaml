@@ -200,23 +200,28 @@ kind: Ingress
 metadata: 
   name: service_name
   annotations:
-    kubernetes.io/ingress.class: "nginx"  
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/websocket-services: preview-service
-    nginx.ingress.kubernetes.io/enable-cors: 'true'
-    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
-    nginx.ingress.kubernetes.io/cors-allow-methods: 'GET, POST, PUT, DELETE, OPTIONS'
-    nginx.ingress.kubernetes.io/cors-allow-headers: 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization'
-    # nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
-    # nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
-    # nginx.ingress.kubernetes.io/proxy-connect-timeout: '3600'
-    nginx.ingress.kubernetes.io/websocket-services: 'true'
-    nginx.ingress.kubernetes.io/enable-websocket: 'true'
-    nginx.ingress.kubernetes.io/enable-cors: 'true'
-    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
-    nginx.ingress.kubernetes.io/cors-allow-methods: 'GET, POST, PUT, DELETE, OPTIONS'
-    nginx.ingress.kubernetes.io/cors-allow-headers: 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization'
+    kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    # WebSocket support for Socket.IO
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-set-header: "Upgrade $http_upgrade"
+    nginx.ingress.kubernetes.io/proxy-set-header: "Connection 'upgrade'"
+    nginx.ingress.kubernetes.io/proxy-set-header: "Host $host"
+    nginx.ingress.kubernetes.io/proxy-set-header: "X-Real-IP $remote_addr"
+    nginx.ingress.kubernetes.io/proxy-set-header: "X-Forwarded-For $proxy_add_x_forwarded_for"
+    nginx.ingress.kubernetes.io/proxy-set-header: "X-Forwarded-Proto $scheme"
+    nginx.ingress.kubernetes.io/proxy-cache: "off"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    # Extended timeouts for WebSocket connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    # CORS settings
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/cors-allow-methods: 'GET, POST, PUT, DELETE, OPTIONS'
+    nginx.ingress.kubernetes.io/cors-allow-headers: 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization'
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx

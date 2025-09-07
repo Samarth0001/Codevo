@@ -60,8 +60,8 @@ const createProjectInDB = async (projectData: {
 
 // Kubernetes operations function
 const createKubernetesResources = async (projectId: string, baseCodePrefix: string, runnerImage: string) => {
-    // Dynamic import for CommonJS compatibility
-    const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
+    // Import Kubernetes client (CommonJS compatible in v0.18.0)
+    const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = require("@kubernetes/client-node");
 
     const kubeconfig = new KubeConfig();
     kubeconfig.loadFromDefault();
@@ -72,18 +72,33 @@ const createKubernetesResources = async (projectId: string, baseCodePrefix: stri
     // Utility function to handle multi-document YAML files
     const readAndParseKubeYaml = (filePath: string, projectId: string): Array<any> => {
         const fileContent = fs.readFileSync(filePath, 'utf8');
-        const docs = yaml.parseAllDocuments(fileContent).map((doc) => {
-            let docString = doc.toString();
-            // Replace service name
-            docString = docString.replace(new RegExp(`service_name`, 'g'), projectId);
-            // Replace base code prefix for initContainer copy command
-            docString = docString.replace(new RegExp(`BASE_CODE_PREFIX`, 'g'), baseCodePrefix);
-            // Replace runner image
-            docString = docString.replace(new RegExp(`RUNNER_IMAGE`, 'g'), runnerImage);
-            // console.log(docString);
-            return yaml.parse(docString);
-        });
-        return docs;
+
+        // Perform templating on raw content first to avoid serializing invalid docs
+        const templatedContent = fileContent
+            .replace(new RegExp(`service_name`, 'g'), projectId)
+            .replace(new RegExp(`BASE_CODE_PREFIX`, 'g'), baseCodePrefix)
+            .replace(new RegExp(`RUNNER_IMAGE`, 'g'), runnerImage);
+
+        // Parse all documents; allow duplicates to avoid hard failures on repeated annotation keys
+        const documents = yaml.parseAllDocuments(templatedContent, { uniqueKeys: false });
+
+        const parsed: any[] = [];
+        for (const document of documents) {
+            // Skip completely empty docs (e.g., trailing ---)
+            if (!document || document.contents == null) continue;
+
+            if (document.errors && document.errors.length > 0) {
+                console.warn(
+                    'createKubernetesResources - YAML document has parse errors and will be skipped:',
+                    document.errors.map((e: any) => e.message)
+                );
+                continue;
+            }
+
+            // Convert to plain JS object for k8s client
+            parsed.push(document.toJSON());
+        }
+        return parsed;
     };
 
     const namespace = "default"; // Assuming a default namespace, adjust as needed
@@ -98,24 +113,15 @@ const createKubernetesResources = async (projectId: string, baseCodePrefix: stri
         try {
             switch (manifest.kind) {
                 case "Deployment":
-                    await appsV1Api.createNamespacedDeployment({
-                        namespace,
-                        body: manifest
-                    });
+                    await appsV1Api.createNamespacedDeployment(namespace, manifest);
                     console.log(`createKubernetesResources - Created Deployment for ${projectId}`);
                     break;
                 case "Service":
-                    await coreV1Api.createNamespacedService({
-                        namespace,
-                        body: manifest
-                    });
+                    await coreV1Api.createNamespacedService(namespace, manifest);
                     console.log(`createKubernetesResources - Created Service for ${projectId}`);
                     break;
                 case "Ingress":
-                    await networkingV1Api.createNamespacedIngress({
-                        namespace,
-                        body: manifest
-                    });
+                    await networkingV1Api.createNamespacedIngress(namespace, manifest);
                     console.log(`createKubernetesResources - Created Ingress for ${projectId}`);
                     break;
                 default:

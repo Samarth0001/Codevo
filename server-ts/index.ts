@@ -126,5 +126,6 @@ app.get("/debug/cookie-config", (req: Request, res: Response): void => {
 });
 
 app.listen(PORT , () => {
-    console.log(`Server is live at port no. ${PORT}`)
+    console.log(`Server is live at port no. ${PORT}, and yes it is working.`)
+    // console.log(`Yes, Server is live at port no. ${PORT}`)
 })

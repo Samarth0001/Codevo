@@ -70,7 +70,7 @@ function startCleanupListener() {
 async function cleanupProject(projectId: string) {
   try {
     console.log(`[CleanupListener] Cleaning up project: ${projectId}`);
-    const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
+    const { KubeConfig, AppsV1Api, CoreV1Api, NetworkingV1Api } = require("@kubernetes/client-node");
     const kubeconfig = new KubeConfig();
     kubeconfig.loadFromDefault();
     const coreV1Api = kubeconfig.makeApiClient(CoreV1Api);
@@ -94,7 +94,7 @@ async function cleanupProject(projectId: string) {
     
     // Delete Kubernetes resources
     try {
-      await appsV1Api.deleteNamespacedDeployment({ name: projectId, namespace });
+      await appsV1Api.deleteNamespacedDeployment(projectId, namespace);
       console.log(`[CleanupListener] Deleted Deployment ${projectId}`);
     } catch (error: any) {
       if (error.statusCode === 404) {
@@ -105,7 +105,7 @@ async function cleanupProject(projectId: string) {
     }
 
     try {
-      await coreV1Api.deleteNamespacedService({ name: projectId, namespace });
+      await coreV1Api.deleteNamespacedService(projectId, namespace);
       console.log(`[CleanupListener] Deleted Service ${projectId}`);
     } catch (error: any) {
       if (error.statusCode === 404) {
@@ -116,7 +116,7 @@ async function cleanupProject(projectId: string) {
     }
 
     try {
-      await networkingV1Api.deleteNamespacedIngress({ name: projectId, namespace });
+      await networkingV1Api.deleteNamespacedIngress(projectId, namespace);
       console.log(`[CleanupListener] Deleted Ingress ${projectId}`);
     } catch (error: any) {
       if (error.statusCode === 404) {
