@@ -45,7 +45,7 @@ export default function AIPanel({ projectId }: AIPanelProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const { permissions } = useCollaboration();
   const canUseAI = permissions?.canEditCode || false;
-  const { activeFile } = useEditor();
+  const { activeFile, setActiveFile } = useEditor();
 
   // localStorage keys for session persistence
   const GENERATE_SESSION_KEY = 'ai_generate_session_id';
@@ -372,8 +372,14 @@ export default function AIPanel({ projectId }: AIPanelProps) {
     aiBus.emit('ai:applyGenerated', { code, strategy: 'replaceFile' });
   }
 
-  function applyDiff(newCode: string) {
-    aiBus.emit('ai:applyGenerated', { code: newCode, strategy: 'replaceFile' });
+  function applyDiff(newCode: string, targetPath?: string) {
+    if (targetPath && targetPath !== activeFile) {
+      setActiveFile(targetPath);
+      // Defer apply until editor switches files
+      setTimeout(() => aiBus.emit('ai:applyGenerated', { code: newCode, strategy: 'replaceFile' }), 100);
+    } else {
+      aiBus.emit('ai:applyGenerated', { code: newCode, strategy: 'replaceFile' });
+    }
   }
 
   return (
@@ -529,7 +535,7 @@ export default function AIPanel({ projectId }: AIPanelProps) {
                   oldCode={m.diff.oldCode}
                   newCode={m.diff.newCode}
                   fileName={m.diff.fileName}
-                  onApply={() => applyDiff(m.diff!.newCode)}
+                  onApply={() => applyDiff(m.diff!.newCode, m.diff!.fileName)}
                   onSeeChanges={() => {
                     aiBus.emit('ai:showDiff', {
                       oldCode: m.diff!.oldCode,

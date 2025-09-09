@@ -374,7 +374,7 @@ export const createProject = async(req: Request, res: Response): Promise<any> =>
             
             // Set runner image based on the existing project's template
             if (existingTemplateName === 'React Javascript' || existingTemplateSlug === 'React Javascript') {
-                runnerImage = 'extremecoder01/runner-react:v2';
+                runnerImage = 'extremecoder01/runner-react:v3';
             } else if (existingTemplateName === 'Node.js' || existingTemplateSlug === 'node-js') {
                 runnerImage = 'extremecoder01/runner:v6';
             } else {
@@ -388,7 +388,7 @@ export const createProject = async(req: Request, res: Response): Promise<any> =>
             // Map known templates using exact names/slugs
             if (templateName === 'React Javascript' || templateSlug === 'React Javascript') {
                 baseCodePrefix = 'Base_Code/React Javascript/';
-                runnerImage = 'extremecoder01/runner-react:v2';
+                runnerImage = 'extremecoder01/runner-react:v3';
             } else if (templateName === 'Node.js' || templateSlug === 'node-js') {
                 baseCodePrefix = 'Base_Code/node-js/';
                 runnerImage = 'extremecoder01/runner:v6';
