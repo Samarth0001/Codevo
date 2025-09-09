@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileExplorer } from "@/components/codingPage/FileExplorer";
 import { Preview } from "@/components/codingPage/Preview";
 import EditorHeader from "@/components/codingPage/EditorHead";
@@ -154,6 +154,9 @@ const CodingPage = () => {
     }
   }
 
+  const hasInitializedRef = useRef<string | null>(null);
+  const userIdDep = user?._id;
+
   useEffect(() => {
     // console.log('CodingPage - useEffect triggered with:', { projectId, user: user?._id, projectName, templateId, userId });
     
@@ -163,31 +166,25 @@ const CodingPage = () => {
       return;
     }
 
-    // console.log('CodingPage - user:', user);
-    // Wait for user data to be loaded
-    if (!user) {
-      // console.log('CodingPage - User data not loaded yet, waiting...');
+    if (!userIdDep) {
+      // Wait for user id
       return;
     }
 
-    if (!user._id) {
-      alert('User not authenticated.');
-      navigate('/login');
-      return;
-    }
+    // Prevent duplicate runs for the same projectId
+    if (hasInitializedRef.current === projectId) return;
+    hasInitializedRef.current = projectId;
 
     // If we have location.state, it's a new project creation
     if (projectName && templateId && userId) {
-      // console.log('CodingPage - Creating new project');
       setLoading(true);
       createProjectFn();
     } else {
       // No location.state means joining existing project
-      // console.log('CodingPage - Joining existing project');
       joinExistingProject();
     }
     // Remove this setLoading(false) as it's handled in the individual functions
-  },[projectId, user]);
+  },[projectId, userIdDep]);
 
   if(loading){
     return (
@@ -252,11 +249,16 @@ const CodingPagePostPodCreation = () => {
     // https://${projectId}.codevo.dev
     // const runnerSocket = io(`http://${projectId}.127.0.0.1.sslip.io`);
     const runnerSocket = io(`https://${projectId}.codevo.live`, {     //https://${projectId}.codevo.live
-      path: "/user/socket.io",
+      path: "/user/socket.io/",
+      transports: ['polling', 'websocket'],
       timeout: 40000, // 40 second timeout
       reconnection: true,
       reconnectionAttempts: 40,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      forceNew: true,
     });
+    
 
     runnerSocket.on('connect', () => {
       // console.log('Connected to runner container');
