@@ -51,7 +51,7 @@ const AuthProvider= ({children}:{children:React.ReactNode}) => {
   }
 
   useEffect(() => {
-    getUserDetails();
+    // getUserDetails();
   }, []);   //runs only one time after refresh
 
   const value = {

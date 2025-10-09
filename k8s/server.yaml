@@ -15,7 +15,7 @@ spec:
       serviceAccountName: server-sa
       containers:
         - name: server
-          image: extremecoder01/server:v12   #change here
+          image: extremecoder01/server:v18   #change here
           imagePullPolicy: Always
           ports:
             - containerPort: 4000 # or your server port

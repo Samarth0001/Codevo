@@ -7,7 +7,6 @@ import { FaClockRotateLeft } from "react-icons/fa6";
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { AuthContext } from '../context/AuthContext';
-import Button from "@/components/ui/button-custom";
 
 
 export const VerifyEmail = () => {

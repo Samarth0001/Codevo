@@ -19,7 +19,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: copy-s3-resources
-          image: bitnami/aws-cli:latest
+          image: amazon/aws-cli:latest
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -53,7 +53,7 @@ spec:
             - name: workspace-volume 
               mountPath: /workspace
         - name: restore-git-repository
-          image: bitnami/aws-cli:latest
+          image: amazon/aws-cli:latest
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -63,31 +63,25 @@ spec:
               ARCHIVE_KEY="Project_Code/${PROJECT_ID}/.git-archive.tar.gz"
               echo "Checking for Git archive at: s3://$BUCKET_NAME/$ARCHIVE_KEY"
               
-              # Ensure tar is available in this image
+              # Ensure tar is available (Amazon Linux should have it, but let's be sure)
               if ! command -v tar >/dev/null 2>&1; then
-                echo "tar is not installed, attempting to install..."
-                (apk add --no-cache tar gzip 2>/dev/null || \
-                 microdnf install -y tar gzip 2>/dev/null || \
-                 yum install -y tar gzip 2>/dev/null || \
-                 apt-get update && apt-get install -y tar gzip 2>/dev/null) || true
+                echo "tar is not installed, installing using yum..."
+                yum install -y tar gzip
+              else
+                echo "tar is already available"
               fi
               
               if aws s3 ls "s3://$BUCKET_NAME/$ARCHIVE_KEY" --endpoint-url "$R2_ENDPOINT" 2>/dev/null; then
                 echo "Git archive found, restoring repository..."
                 aws s3 cp "s3://$BUCKET_NAME/$ARCHIVE_KEY" /tmp/.git-archive.tar.gz --endpoint-url "$R2_ENDPOINT"
                 cd /workspace
-                if command -v tar >/dev/null 2>&1; then
-                  tar -xzf /tmp/.git-archive.tar.gz
-                  rm -f /tmp/.git-archive.tar.gz
-                  if [ -d "/workspace/.git" ]; then
-                    echo "Git repository restored successfully"
-                    ls -la .git/
-                  else
-                    echo "Failed to restore .git directory even after extraction"
-                    exit 1
-                  fi
+                tar -xzf /tmp/.git-archive.tar.gz
+                rm -f /tmp/.git-archive.tar.gz
+                if [ -d "/workspace/.git" ]; then
+                  echo "Git repository restored successfully"
+                  ls -la .git/
                 else
-                  echo "tar is still unavailable; cannot extract Git archive"
+                  echo "Failed to restore .git directory even after extraction"
                   exit 1
                 fi
               else
