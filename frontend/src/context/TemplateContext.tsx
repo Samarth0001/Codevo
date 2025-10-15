@@ -59,7 +59,7 @@ export const TemplateProvider: React.FC<TemplateProviderProps> = ({ children }) 
   };
 
   useEffect(() => {
-    // fetchTemplates();
+    fetchTemplates();
   }, []);
 
   const value = {

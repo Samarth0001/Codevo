@@ -178,7 +178,7 @@ const EditorHeader = ({
                     <span>Invite</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-800 border-gray-700 text-white">
+                <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-[600px]">
                   <DialogHeader>
                     <DialogTitle>Invite Collaborators</DialogTitle>
                   </DialogHeader>
